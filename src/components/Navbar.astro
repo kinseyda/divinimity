@@ -1,0 +1,55 @@
+---
+import {
+  MoonIcon,
+  PaintBrushIcon,
+  SunIcon,
+  AdjustmentsHorizontalIcon,
+  Bars3Icon,
+} from "@heroicons/vue/24/outline";
+---
+
+<div class="navbar bg-base-300 shadow min-h-16 max-h-16">
+  <div class="navbar-start">
+    <div class="dropdown">
+      <div tabindex="0" role="button" class="btn btn-ghost lg:hidden">
+        <Bars3Icon class="h-10 w-10" role="button" />
+      </div>
+      <ul
+        tabindex="0"
+        class="menu menu-lg dropdown-content bg-base-100 rounded-box z-1 mt-3 w-52 p-2 shadow"
+      >
+        <li><a href="/">Home</a></li>
+        <li><a href="/play">Play</a></li>
+        <li><a href="/about">About</a></li>
+      </ul>
+    </div>
+    <a class="btn btn-ghost text-xl" href="/"> Divinimity </a>
+  </div>
+  <div class="navbar-center hidden lg:flex">
+    <ul class="menu menu-horizontal menu-lg px-1">
+      <li><a href="/">Home</a></li>
+      <li><a href="/play">Play</a></li>
+      <li><a href="/about">About</a></li>
+    </ul>
+  </div>
+  <div class="navbar-end">
+    <details class="dropdown dropdown-end">
+      <summary class="btn btn-ghost"
+        ><AdjustmentsHorizontalIcon class="h-10 w-10" /></summary
+      >
+      <ul
+        class="menu menu-vertical dropdown-content bg-base-200 rounded-box shadow"
+      >
+        <li>
+          <label class="swap swap-rotate">
+            <!-- this hidden checkbox controls the state -->
+            <input type="checkbox" class="theme-controller" value="winter" />
+
+            <SunIcon class="swap-on h-10 w-10" />
+            <MoonIcon class="swap-off h-10 w-10" />
+          </label>
+        </li>
+      </ul>
+    </details>
+  </div>
+</div>

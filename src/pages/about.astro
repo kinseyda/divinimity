@@ -1,0 +1,55 @@
+---
+import { Image } from "astro:assets";
+import ReportScreenshot from "../assets/report-screenshot.png";
+import Layout from "../layouts/Layout.astro";
+import "../styles/global.css";
+---
+
+<Layout>
+  <div class="hero">
+    <div class="hero-content text-center flex flex-col items-center">
+      <h1 class="mb-5 text-5xl font-bold">About Divinimity</h1>
+      <div class="flex flex-col justify-items-center items-center gap-4">
+        <p>
+          Divinim is an abstract strategy game created by Daniel Kinsey (me). It
+          is played on a grid of tiles, where some tiles are "marked" or
+          "poisoned". Players take turns slicing the grid along grid lines,
+          creating two new boards from the original board, discarding any that
+          don't include a marked tile. The following player can then make a turn
+          on any board they choose. The game continues until no valid moves
+          remain.
+        </p>
+        <p>
+          Divinim started as my honour's project at the University of Ottawa,
+          supervised by Jean-Lou de Carufel. It is a simple modification of the
+          game “Bad Chocolate”, a game described by James Tanton in his 2001
+          book <i>Solve This: Math Activities for Students and Clubs</i>. In
+          Tanton's version, a single square is poisoned, leading to a game that
+          directly maps to Nim. This makes the game simple enough to play
+          optimally as a human being. Divinim, on the other hand, introduces
+          additional complexity with multiple marked tiles and having multiple
+          boards in play.
+        </p>
+        <p>
+          Many variations of this game are possible. For example, the winning
+          condition can be modified to include different criteria for success.
+          In my analysis of the game, I particularly focused on versions with
+          two players: one where the last player to make a valid move wins, and
+          another where making the last move on a board "poisons" the player,
+          creating a scored version.
+        </p>
+        <p>
+          My analysis of the game brought to light several interesting
+          properties and strategies. I wrote a comprehensive report on my
+          findings, which can be found
+          <a href="/assets/report.pdf" target="_blank" class="link"> here</a>.
+        </p>
+        <Image
+          src={ReportScreenshot}
+          alt="Screenshot of the report cover page"
+          class="max-w-lg rounded-3xl shadow-3xl"
+        />
+      </div>
+    </div>
+  </div>
+</Layout>

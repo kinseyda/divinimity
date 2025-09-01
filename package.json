@@ -1,0 +1,24 @@
+{
+  "name": "divinimity",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/vue": "^5.1.0",
+    "@heroicons/vue": "^2.2.0",
+    "@nanostores/persistent": "^1.1.0",
+    "@nanostores/vue": "^1.0.1",
+    "@tailwindcss/vite": "^4.1.11",
+    "astro": "^5.12.8",
+    "daisyui": "^5.0.50",
+    "nanostores": "^1.0.1",
+    "paper": "^0.12.18",
+    "tailwindcss": "^4.1.11",
+    "vue": "^3.5.18"
+  }
+}

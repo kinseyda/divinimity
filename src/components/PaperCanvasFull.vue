@@ -1,5 +1,5 @@
 <template>
-  <canvas ref="paperCanvas" class="border-4 border-secondary size-fit" />
+  <canvas ref="paperCanvas" resize />
 </template>
 
 <script lang="ts">
@@ -45,4 +45,9 @@ export default {
 };
 </script>
 
-<style scoped></style>
+<style scoped>
+canvas[resize] {
+  width: 100%;
+  height: 100%;
+}
+</style>

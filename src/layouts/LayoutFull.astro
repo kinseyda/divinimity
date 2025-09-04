@@ -5,8 +5,8 @@ import LayoutBase from "./LayoutBase.astro";
 ---
 
 <LayoutBase>
-  <Navbar />
-  <div class="filter backdrop-blur-md max-w-3xl lg:m-5 rounded-4xl grow">
+  <Navbar class="z-10" />
+  <div class="w-screen h-screen absolute -z-10">
     <slot />
   </div>
 </LayoutBase>

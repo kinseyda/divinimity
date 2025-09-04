@@ -1,19 +1,9 @@
 ---
 import GameContainer from "../components/GameContainer.vue";
-import PaperCanvas from "../components/PaperCanvas.vue";
-import Layout from "../layouts/Layout.astro";
+import LayoutFull from "../layouts/LayoutFull.astro";
 import "../styles/global.css";
 ---
 
-<Layout>
-  <div class="hero">
-    <div class="hero-content text-center">
-      <div class="max-w-md">
-        <h1 class="mb-5 text-5xl font-bold">Play Divinimity</h1>
-        <p class="mb-5">
-          <GameContainer client:load />
-        </p>
-      </div>
-    </div>
-  </div>
-</Layout>
+<LayoutFull>
+  <GameContainer client:load />
+</LayoutFull>

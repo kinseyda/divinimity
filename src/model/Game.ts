@@ -24,20 +24,34 @@ interface Coordinate {
 
 interface Player {}
 
-interface Board {
-  // In Divinim, a board is a grid of tiles arranged in rows and columns. Some
-  // coordinates are "marked" / "poisoned".
+interface BoardDimensions {
   width: number;
   height: number;
+}
+
+export interface Board {
+  // In Divinim, a board is a grid of tiles arranged in rows and columns. Some
+  // coordinates are "marked" / "poisoned".
+  dimensions: BoardDimensions;
   markedCoordinates: Coordinate[];
 }
 
-interface Action {
+export function newBoard(
+  dimensions: BoardDimensions,
+  markedCoordinates: Coordinate[]
+): Board {
+  return {
+    dimensions,
+    markedCoordinates,
+  };
+}
+
+export interface Action {
   slice: Slice;
   board: Board;
 }
 
-interface Turn {
+export interface Turn {
   player: Player;
   action: Action;
 }
@@ -46,18 +60,129 @@ interface WinCondition<TState extends BaseState> {
   condition: (state: TState) => boolean;
 }
 
-interface BaseState {
+export interface SliceResult {
   boards: Board[];
-  currentPlayer: Player;
+  removedBoards: Board[]; // Will all have either zero marked coordinates, or be a single 1x1 board that is marked
 }
 
-interface VisualState extends BaseState {
+export interface TurnResult {
+  turn: Turn;
+  inState: BaseState;
+  outState: BaseState;
+  sliceResult: SliceResult;
+}
+
+export function slice(board: Board, slice: Slice): SliceResult | null {
+  // Apply a slice on a board.
+  // Returns null if the slice is invalid (out of bounds).
+  // Does not return any boards that do not have a marked coordinate.
+  // Marked coordinates are moved to their new positions on the sliced boards.
+
+  const sliceDir = slice.direction;
+  const sliceIndex = slice.line;
+
+  if (
+    sliceIndex < 1 ||
+    sliceIndex >=
+      (sliceDir == Direction.Horizontal
+        ? board.dimensions.height
+        : board.dimensions.width)
+  ) {
+    return null;
+  }
+
+  const topOrLeftCoords = [];
+  const bottomOrRightCoords = [];
+  for (const coord of board.markedCoordinates) {
+    if (sliceDir == Direction.Horizontal && coord.y < sliceIndex) {
+      topOrLeftCoords.push(coord);
+    } else if (sliceDir == Direction.Vertical && coord.x < sliceIndex) {
+      topOrLeftCoords.push(coord);
+    } else if (sliceDir == Direction.Horizontal && coord.y >= sliceIndex) {
+      // Modify the coord to be relative to the new board
+      bottomOrRightCoords.push({
+        x: coord.x,
+        y: coord.y - sliceIndex,
+      });
+    } else if (sliceDir == Direction.Vertical && coord.x >= sliceIndex) {
+      // Modify the coord to be relative to the new board
+      bottomOrRightCoords.push({
+        x: coord.x - sliceIndex,
+        y: coord.y,
+      });
+    }
+  }
+
+  let boards = [
+    newBoard(
+      {
+        width: board.dimensions.width,
+        height: sliceIndex,
+      },
+      topOrLeftCoords
+    ),
+    newBoard(
+      {
+        width: board.dimensions.width,
+        height: board.dimensions.height - sliceIndex,
+      },
+      bottomOrRightCoords
+    ),
+  ];
+
+  const removedBoards = boards.filter(
+    (b) =>
+      b.markedCoordinates.length === 0 ||
+      (b.dimensions.width === 1 &&
+        b.dimensions.height === 1 &&
+        b.markedCoordinates.length === 1)
+  );
+  boards = boards.filter((b) => !removedBoards.includes(b));
+
+  return {
+    boards,
+    removedBoards,
+  };
+}
+
+abstract class BaseState {
+  boards: Board[];
+  currentPlayer: Player;
+
+  constructor(players: Player[], boards: Board[]) {
+    this.boards = boards;
+    this.currentPlayer = players[0];
+  }
+
+  abstract postTurnUpdate(turnResult: TurnResult): void;
+}
+
+export class VisualState extends BaseState {
   // For displaying the boards on a 2D plane, for example, on a canvas.
-  boardPositions: Coordinate[][];
+  boardPositions: Coordinate[];
+
+  constructor(players: Player[], boards: Board[]) {
+    super(players, boards);
+    this.boardPositions = this.calculateInitialBoardPositions();
+  }
+
+  private calculateInitialBoardPositions(): Coordinate[] {
+    // Calculate the positions of each board on the 2D plane.
+    return this.boards.map((board, index) => ({
+      x: index * board.dimensions.width,
+      y: 0,
+    }));
+  }
+
+  postTurnUpdate(turnResult: TurnResult): void {
+    // Update the visual representation of the boards based on the turn result.
+    // The new bars will need to be placed where the old one was
+    //   TODO
+  }
 }
 
 // Base class for a Divinim game
-class Game<TState extends BaseState> {
+export class Game<TState extends BaseState> {
   protected state: TState;
 
   constructor(initialState: TState) {
@@ -73,11 +198,30 @@ class Game<TState extends BaseState> {
   }
 
   public simulateTurn(turn: Turn): TState {
-    // Apply the turn to the game state
     return this.state;
   }
 
   public playTurn(turn: Turn): void {
     this.setState(this.simulateTurn(turn));
+  }
+
+  public getAvailableActions(): Action[] {
+    // For each board, a slice can be made between any two tiles.
+    const actions: Action[] = [];
+    for (const board of this.state.boards) {
+      for (let x = 1; x < board.dimensions.width; x++) {
+        actions.push({
+          slice: { direction: Direction.Vertical, line: x },
+          board: board,
+        });
+      }
+      for (let y = 1; y < board.dimensions.height; y++) {
+        actions.push({
+          slice: { direction: Direction.Horizontal, line: y },
+          board: board,
+        });
+      }
+    }
+    return actions;
   }
 }

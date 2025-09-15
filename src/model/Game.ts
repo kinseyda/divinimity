@@ -34,6 +34,11 @@ export interface Board {
   // coordinates are "marked" / "poisoned".
   dimensions: BoardDimensions;
   markedCoordinates: Coordinate[];
+  uuid: string;
+}
+
+function generateUUID(): string {
+  return crypto.randomUUID();
 }
 
 export function newBoard(
@@ -43,6 +48,7 @@ export function newBoard(
   return {
     dimensions,
     markedCoordinates,
+    uuid: generateUUID(),
   };
 }
 
@@ -146,11 +152,14 @@ export function slice(board: Board, slice: Slice): SliceResult | null {
 }
 
 abstract class BaseState {
-  boards: Board[];
+  boards: Record<string, Board>; // Boards indexed by their UUIDs. This is to make it easier to update them, and to ensure that the orders are consistent across states, even when visualized and with boards being removed.
   currentPlayer: Player;
 
   constructor(players: Player[], boards: Board[]) {
-    this.boards = boards;
+    this.boards = boards.reduce((acc, board) => {
+      acc[board.uuid] = board;
+      return acc;
+    }, {} as Record<string, Board>);
     this.currentPlayer = players[0];
   }
 
@@ -159,19 +168,17 @@ abstract class BaseState {
 
 export class VisualState extends BaseState {
   // For displaying the boards on a 2D plane, for example, on a canvas.
-  boardPositions: Coordinate[];
+  boardPositions: Record<string, { x: number; y: number }>; // Positions indexed by board UUIDs
 
   constructor(players: Player[], boards: Board[]) {
     super(players, boards);
-    this.boardPositions = this.calculateInitialBoardPositions();
-  }
-
-  private calculateInitialBoardPositions(): Coordinate[] {
-    // Calculate the positions of each board on the 2D plane.
-    return this.boards.map((board, index) => ({
-      x: index * board.dimensions.width,
-      y: 0,
-    }));
+    // Board positions are initialized at -1,-1 for all boards here since we
+    // don't know the canvas dimensions. They will be updated later to be
+    // placed around the center of the canvas, but before the first render.
+    this.boardPositions = {};
+    for (const board of boards) {
+      this.boardPositions[board.uuid] = { x: -1, y: -1 };
+    }
   }
 
   postTurnUpdate(turnResult: TurnResult): void {
@@ -208,7 +215,7 @@ export class Game<TState extends BaseState> {
   public getAvailableActions(): Action[] {
     // For each board, a slice can be made between any two tiles.
     const actions: Action[] = [];
-    for (const board of this.state.boards) {
+    for (const board of Object.values(this.state.boards)) {
       for (let x = 1; x < board.dimensions.width; x++) {
         actions.push({
           slice: { direction: Direction.Vertical, line: x },

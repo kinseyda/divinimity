@@ -15,9 +15,8 @@ import type { RedrawEvent } from "../utils/PaperUtils";
 import { getDaisyUIColor } from "../utils/StyleUtils";
 
 const tileSize = { width: 100, height: 100 }; // Pixel size of each tile
-const repulsionStrength = 100;
-const attractionStrength = 100;
-const intersectionRepulsionMultiplier = 100000000;
+const repulsionStrength = 50000;
+const attractionStrength = 1000;
 const timeScale = 1; // Adjust this to speed up or slow down the pseudo-physics simulation
 const boardPadding = 20; // Minimum distance between boards
 
@@ -52,6 +51,43 @@ function rectangleDistance(
   );
 
   return Math.sqrt(dx * dx + dy * dy);
+}
+
+/**
+ * Calculates the minimum translation vector to separate two overlapping rectangles.
+ * If the rectangles do not overlap, returns a zero vector.
+ */
+function minimumTranslationVector(
+  rectA: paper.Rectangle,
+  rectB: paper.Rectangle,
+  padding = boardPadding
+): paper.Point {
+  if (!rectA.intersects(rectB, padding)) {
+    return new paper.Point(0, 0);
+  }
+
+  const overlapX =
+    rectA.width / 2 +
+    rectB.width / 2 -
+    Math.abs(rectA.center.x - rectB.center.x) +
+    padding;
+  const overlapY =
+    rectA.height / 2 +
+    rectB.height / 2 -
+    Math.abs(rectA.center.y - rectB.center.y) +
+    padding;
+
+  if (overlapX < overlapY) {
+    return new paper.Point(
+      rectA.center.x < rectB.center.x ? -overlapX : overlapX,
+      0
+    );
+  } else {
+    return new paper.Point(
+      0,
+      rectA.center.y < rectB.center.y ? -overlapY : overlapY
+    );
+  }
 }
 
 function drawBoard(board: Board, position: paper.Point): paper.Group {
@@ -220,8 +256,9 @@ function updatePositions(
         repulsionStrength / (centerPointDistance * centerPointDistance); // Inverse square law
       let force = direction.multiply(forceMagnitude);
       if (distance === 0) {
-        // If they overlap, apply a stronger force to separate them
-        force = force.multiply(intersectionRepulsionMultiplier);
+        // If overlapping, apply mtv to separate them
+        const mtv = minimumTranslationVector(rectA, rectB);
+        force = mtv.multiply(repulsionStrength);
       }
       forces[board.uuid] = forces[board.uuid].add(force);
     }
@@ -266,9 +303,10 @@ function placeAroundCenter(
   const positions: paper.Point[] = [];
   const angleStep = (2 * Math.PI) / boards.length;
   const radius = 300;
-
+  // offset randomly to avoid exact horizontal/vertical alignment, makes for faster stabilization
+  const offset = Math.random() * Math.PI * 2;
   for (let i = 0; i < boards.length; i++) {
-    const angle = i * angleStep;
+    const angle = i * angleStep + offset;
     const x = center.x + radius * Math.cos(angle);
     const y = center.y + radius * Math.sin(angle);
     positions.push(new paper.Point(x, y));
@@ -318,9 +356,9 @@ export default {
         } else {
           // Update positions based on forces
           // Center point attraction
-          // const centerPoint = view.center;
+          const centerPoint = view.center;
           // Center line attraction
-          const centerPoint = centerLine(view);
+          //   const centerPoint = centerLine(view);
 
           updatePositions(boards, state, event.delta * timeScale, centerPoint);
         }
@@ -334,6 +372,10 @@ export default {
           const boardGroup = drawBoard(board, pos);
           groups.push(boardGroup);
         }
+
+        project.activeLayer.fitBounds(view.bounds.scale(0.75), false);
+        project.activeLayer.removeChildren();
+        project.activeLayer.addChildren(groups);
       };
     },
   },
@@ -349,13 +391,17 @@ export default {
       { x: 2, y: 2 },
     ]);
 
-    const testBoard3 = newBoard({ width: 5, height: 3 }, [
+    const testBoard3 = newBoard({ width: 7, height: 3 }, [
       { x: 0, y: 0 },
       { x: 1, y: 1 },
       { x: 2, y: 2 },
     ]);
+    const testBoard4 = newBoard({ width: 2, height: 4 }, [
+      { x: 0, y: 0 },
+      { x: 1, y: 1 },
+    ]);
     const testGame = new Game(
-      new VisualState([], [testBoard1, testBoard2, testBoard3])
+      new VisualState([], [testBoard1, testBoard2, testBoard3, testBoard4])
     );
 
     return {

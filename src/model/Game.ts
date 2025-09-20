@@ -1,9 +1,9 @@
-enum Direction {
+export enum Direction {
   Horizontal,
   Vertical,
 }
 
-interface Slice {
+export interface Slice {
   // A slice is a single cut along a grid line, between two rows or two columns
   // of tiles. It is defined by its direction (horizontal or vertical) and the
   // line it cuts through (either a row or a column). The line number is an
@@ -15,16 +15,16 @@ interface Slice {
   line: number;
 }
 
-interface Coordinate {
+export interface TileCoordinate {
   // Coordinates start from the top-left corner (0, 0), like pixels, not like
   // regular cartesian coordinates.
   x: number;
   y: number;
 }
 
-interface Player {}
+export interface Player {}
 
-interface BoardDimensions {
+export interface BoardDimensions {
   width: number;
   height: number;
 }
@@ -33,7 +33,7 @@ export interface Board {
   // In Divinim, a board is a grid of tiles arranged in rows and columns. Some
   // coordinates are "marked" / "poisoned".
   dimensions: BoardDimensions;
-  markedCoordinates: Coordinate[];
+  markedCoordinates: TileCoordinate[];
   uuid: string;
 }
 
@@ -43,7 +43,7 @@ function generateUUID(): string {
 
 export function newBoard(
   dimensions: BoardDimensions,
-  markedCoordinates: Coordinate[]
+  markedCoordinates: TileCoordinate[]
 ): Board {
   return {
     dimensions,
@@ -62,7 +62,7 @@ export interface Turn {
   action: Action;
 }
 
-interface WinCondition<TState extends BaseState> {
+export interface WinCondition<TState extends BaseState> {
   condition: (state: TState) => boolean;
 }
 
@@ -151,7 +151,7 @@ export function slice(board: Board, slice: Slice): SliceResult | null {
   };
 }
 
-abstract class BaseState {
+export abstract class BaseState {
   boards: Record<string, Board>; // Boards indexed by their UUIDs. This is to make it easier to update them, and to ensure that the orders are consistent across states, even when visualized and with boards being removed.
   currentPlayer: Player;
 
@@ -164,28 +164,6 @@ abstract class BaseState {
   }
 
   abstract postTurnUpdate(turnResult: TurnResult): void;
-}
-
-export class VisualState extends BaseState {
-  // For displaying the boards on a 2D plane, for example, on a canvas.
-  boardPositions: Record<string, { x: number; y: number }>; // Positions indexed by board UUIDs
-
-  constructor(players: Player[], boards: Board[]) {
-    super(players, boards);
-    // Board positions are initialized at -1,-1 for all boards here since we
-    // don't know the canvas dimensions. They will be updated later to be
-    // placed around the center of the canvas, but before the first render.
-    this.boardPositions = {};
-    for (const board of boards) {
-      this.boardPositions[board.uuid] = { x: -1, y: -1 };
-    }
-  }
-
-  postTurnUpdate(turnResult: TurnResult): void {
-    // Update the visual representation of the boards based on the turn result.
-    // The new bars will need to be placed where the old one was
-    //   TODO
-  }
 }
 
 // Base class for a Divinim game

@@ -1,0 +1,17 @@
+---
+import DebugButtons from "../components/DebugButtons.vue";
+import Layout from "../layouts/Layout.astro";
+import "../styles/global.css";
+---
+
+<Layout>
+  <div class="hero">
+    <div class="hero-content text-center flex flex-col items-center">
+      <h1 class="mb-5 text-5xl font-bold text-error">DEBUG</h1>
+      <div class="mb-5">I promise I don't usually test on production code.</div>
+      <div class="grid gap-4 justify-items-center items-center">
+        <DebugButtons client:load />
+      </div>
+    </div>
+  </div>
+</Layout>

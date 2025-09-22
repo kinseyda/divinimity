@@ -1,5 +1,13 @@
 ---
+import DebugInfo from "../components/DebugInfo.vue";
 import "../styles/global.css";
+const astroInfo = {
+  href: Astro.url.href,
+  origin: Astro.url.origin,
+  pathname: Astro.url.pathname,
+  generator: Astro.generator,
+  buildDate: new Date().toISOString(), // Note this is run at build time
+};
 ---
 
 <!doctype html>
@@ -17,6 +25,7 @@ import "../styles/global.css";
         <slot />
       </div>
     </div>
+    <DebugInfo client:load astroInfo={astroInfo} />
   </body>
 
   <style>

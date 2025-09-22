@@ -111,6 +111,12 @@ export default {
       const secondaryColor = new paper.Color(
         getDaisyUIColor("--color-secondary")
       );
+      const warningColor = new paper.Color(getDaisyUIColor("--color-warning"));
+      const successColor = new paper.Color(getDaisyUIColor("--color-success"));
+      const errorColor = new paper.Color(getDaisyUIColor("--color-error"));
+      const infoColor = new paper.Color(getDaisyUIColor("--color-info"));
+      const baseColor = new paper.Color(getDaisyUIColor("--color-base-300"));
+
       const paperBoards = Object.values(this.gameState!.paperBoards);
 
       if (
@@ -142,7 +148,7 @@ export default {
 
       const groups = [] as paper.Group[];
       for (const board of paperBoards) {
-        const boardGroup = board.draw();
+        const boardGroup = board.draw(errorColor, baseColor, primaryColor);
         groups.push(boardGroup);
       }
       project.activeLayer.addChildren(groups);

@@ -128,7 +128,11 @@ export class PaperBoard {
     );
   }
 
-  public draw(): paper.Group {
+  public draw(
+    colorMarked: paper.Color,
+    colorUnmarked: paper.Color,
+    colorGrid: paper.Color
+  ): paper.Group {
     const group = new paper.Group();
     group.data = { boardUUID: this.uuid } as BoardData;
 
@@ -142,8 +146,8 @@ export class PaperBoard {
       new paper.Size(boardWidth, boardHeight)
     );
     const boardPath = new paper.Path.Rectangle(boardRect);
-    boardPath.fillColor = new paper.Color("white");
-    boardPath.strokeColor = new paper.Color("black");
+    boardPath.fillColor = colorUnmarked;
+    boardPath.strokeColor = colorGrid;
     boardPath.strokeWidth = 2;
     group.addChild(boardPath);
     // Draw grid lines
@@ -153,7 +157,7 @@ export class PaperBoard {
         new paper.Point(boardRect.left, y),
         new paper.Point(boardRect.right, y)
       );
-      line.strokeColor = new paper.Color("black");
+      line.strokeColor = colorGrid;
       line.strokeWidth = 1;
       group.addChild(line);
     }
@@ -164,7 +168,7 @@ export class PaperBoard {
         new paper.Point(x, boardRect.top),
         new paper.Point(x, boardRect.bottom)
       );
-      line.strokeColor = new paper.Color("black");
+      line.strokeColor = colorGrid;
       line.strokeWidth = 1;
       group.addChild(line);
     }
@@ -181,8 +185,8 @@ export class PaperBoard {
         new paper.Size(PaperBoard.tileSize.width, PaperBoard.tileSize.height)
       );
       const tilePath = new paper.Path.Rectangle(tileRect);
-      tilePath.fillColor = new paper.Color("red");
-      tilePath.strokeColor = new paper.Color("black");
+      tilePath.fillColor = colorMarked;
+      tilePath.strokeColor = colorGrid;
       tilePath.strokeWidth = 1;
       group.addChild(tilePath);
     }
@@ -200,6 +204,10 @@ export class VisualState extends BaseState {
   static attractionStrength = 1000;
   static timeScale = 1; // Adjust this to speed up or slow down the pseudo-physics simulation
   static boardPadding = 50; // Minimum distance between boards
+
+  static markColor = new paper.Color("red");
+  static unmarkColor = new paper.Color("white");
+  static gridLineColor = new paper.Color("black");
 
   constructor(players: Player[], boards: Board[]) {
     super(players, boards);

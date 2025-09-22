@@ -1,11 +1,13 @@
 ---
 import {
-  MoonIcon,
-  PaintBrushIcon,
-  SunIcon,
   AdjustmentsHorizontalIcon,
   Bars3Icon,
+  MoonIcon,
+  SunIcon,
 } from "@heroicons/vue/24/outline";
+
+let { pathname } = Astro.url;
+pathname = pathname.replace(/\/+$/, "").replace(/^\/+/, ""); // Remove trailing and leading slashes
 ---
 
 <div class="navbar bg-base-300 shadow min-h-16 max-h-16">
@@ -18,18 +20,38 @@ import {
         tabindex="0"
         class="menu menu-lg dropdown-content bg-base-100 rounded-box z-1 mt-3 w-52 p-2 shadow"
       >
-        <li><a href="/">Home</a></li>
-        <li><a href="/play">Play</a></li>
-        <li><a href="/about">About</a></li>
+        <li>
+          <a href="/" class:list={[pathname === "" ? "outline" : ""]}>Home</a>
+        </li>
+        <li>
+          <a href="/play" class:list={[pathname === "play" ? "outline" : ""]}
+            >Play</a
+          >
+        </li>
+        <li>
+          <a href="/about" class:list={[pathname === "about" ? "outline" : ""]}
+            >About</a
+          >
+        </li>
       </ul>
     </div>
     <a class="btn btn-ghost text-xl" href="/"> Divinimity </a>
   </div>
   <div class="navbar-center hidden lg:flex">
-    <ul class="menu menu-horizontal menu-lg px-1">
-      <li><a href="/">Home</a></li>
-      <li><a href="/play">Play</a></li>
-      <li><a href="/about">About</a></li>
+    <ul class="menu menu-horizontal menu-lg px-1 gap-2">
+      <li>
+        <a href="/" class:list={[pathname === "" ? "outline" : ""]}>Home</a>
+      </li>
+      <li>
+        <a href="/play" class:list={[pathname === "play" ? "outline" : ""]}
+          >Play</a
+        >
+      </li>
+      <li>
+        <a href="/about" class:list={[pathname === "about" ? "outline" : ""]}
+          >About</a
+        >
+      </li>
     </ul>
   </div>
   <div class="navbar-end">

@@ -5,8 +5,10 @@ import LayoutBase from "./LayoutBase.astro";
 ---
 
 <LayoutBase>
-  <Navbar class="z-10" />
-  <div class="w-screen h-screen absolute -z-10">
-    <slot />
+  <div class="w-screen h-screen absolute flex flex-col">
+    <Navbar />
+    <div class="flex-grow overflow-auto">
+      <slot />
+    </div>
   </div>
 </LayoutBase>

@@ -12,82 +12,12 @@ import PaperCanvasFull from "./PaperCanvasFull.vue";
 import paper from "paper";
 import { Game, newBoard } from "../model/Game";
 import { getDaisyUIColor } from "../utils/StyleUtils";
-import { VisualState, type PaperBoard, type RedrawEvent } from "./PaperUtils";
-
-const repulsionStrength = 50000;
-const attractionStrength = 1000;
-const timeScale = 1; // Adjust this to speed up or slow down the pseudo-physics simulation
-const boardPadding = 20; // Minimum distance between boards
-
-/**
- * Finds the minimum distance between two rectangles.
- * @param rectA
- * @param rectB
- */
-function rectangleDistance(
-  rectA: paper.Rectangle,
-  rectB: paper.Rectangle,
-  padding = boardPadding
-): number {
-  // If they overlap, the distance is zero
-  if (rectA.intersects(rectB, padding)) return 0;
-
-  const dx = Math.max(
-    0,
-    rectA.left > rectB.right
-      ? rectA.left - rectB.right
-      : rectB.left > rectA.right
-      ? rectB.left - rectA.right
-      : 0
-  );
-  const dy = Math.max(
-    0,
-    rectA.top > rectB.bottom
-      ? rectA.top - rectB.bottom
-      : rectB.top > rectA.bottom
-      ? rectB.top - rectA.bottom
-      : 0
-  );
-
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-/**
- * Calculates the minimum translation vector to separate two overlapping rectangles.
- * If the rectangles do not overlap, returns a zero vector.
- */
-function minimumTranslationVector(
-  rectA: paper.Rectangle,
-  rectB: paper.Rectangle,
-  padding = boardPadding
-): paper.Point {
-  if (!rectA.intersects(rectB, padding)) {
-    return new paper.Point(0, 0);
-  }
-
-  const overlapX =
-    rectA.width / 2 +
-    rectB.width / 2 -
-    Math.abs(rectA.center.x - rectB.center.x) +
-    padding;
-  const overlapY =
-    rectA.height / 2 +
-    rectB.height / 2 -
-    Math.abs(rectA.center.y - rectB.center.y) +
-    padding;
-
-  if (overlapX < overlapY) {
-    return new paper.Point(
-      rectA.center.x < rectB.center.x ? -overlapX : overlapX,
-      0
-    );
-  } else {
-    return new paper.Point(
-      0,
-      rectA.center.y < rectB.center.y ? -overlapY : overlapY
-    );
-  }
-}
+import {
+  VisualState,
+  type BoardData,
+  type PaperBoard,
+  type RedrawEvent,
+} from "./PaperUtils";
 
 function centerLine(view: paper.View): paper.Path.Line {
   const width = view.size.width;
@@ -105,82 +35,6 @@ function centerLine(view: paper.View): paper.Path.Line {
       from: new paper.Point(horizontalPad, view.center.y),
       to: new paper.Point(width - horizontalPad, view.center.y),
     });
-  }
-}
-
-/**
- * Update the positions of boards based on repulsion and attraction forces.
- * Values are modified in-place.
- * @param boards
- * @param visualState
- * @param frameTime - Time elapsed since last frame in milliseconds
- * @param attractionPath - A path that boards are attracted to (e.g., a center
- * line or point)
- */
-function updatePositions(
-  visualState: VisualState,
-  frameTime: number,
-  attractionPath: paper.Path | paper.Point
-): void {
-  const boards = Object.values(visualState.paperBoards);
-  // Calculate repulsion forces between boards
-  // Points here are vectors relative to the board's current position
-  const forces: Record<string, paper.Point> = {};
-  for (const board of boards) {
-    forces[board.uuid] = new paper.Point(0, 0);
-  }
-
-  for (const board of boards) {
-    const rectA = visualState.boundingRect(board.uuid);
-
-    for (const otherBoard of boards) {
-      if (otherBoard.uuid === board.uuid) continue;
-      const rectB = visualState.boundingRect(otherBoard.uuid);
-
-      const distance = rectangleDistance(rectA, rectB);
-      const centerPointDistance = rectA.center.getDistance(rectB.center);
-      const direction = rectA.center.subtract(rectB.center).normalize();
-      const forceMagnitude =
-        repulsionStrength / (centerPointDistance * centerPointDistance); // Inverse square law
-      let force = direction.multiply(forceMagnitude);
-      if (distance === 0) {
-        // If overlapping, apply mtv to separate them
-        const mtv = minimumTranslationVector(rectA, rectB);
-        force = mtv.multiply(repulsionStrength);
-      }
-      forces[board.uuid] = forces[board.uuid].add(force);
-    }
-  }
-
-  // Calculate attraction forces towards the attraction path or point
-  for (const board of boards) {
-    const pos = new paper.Point(
-      visualState.paperBoards[board.uuid].position.x,
-      visualState.paperBoards[board.uuid].position.y
-    );
-    let closestPoint: paper.Point;
-    if (attractionPath instanceof paper.Path) {
-      closestPoint = attractionPath.getNearestPoint(pos) || pos;
-    } else {
-      closestPoint = attractionPath;
-    }
-    const delta = closestPoint.subtract(pos);
-    const forceMagnitude = attractionStrength * delta.length;
-    const force = delta.normalize().multiply(forceMagnitude);
-    forces[board.uuid] = forces[board.uuid].add(force);
-  }
-
-  // Update positions based on calculated forces
-  for (const board of boards) {
-    const force = forces[board.uuid];
-    const pos = new paper.Point(
-      visualState.paperBoards[board.uuid].position.x,
-      visualState.paperBoards[board.uuid].position.y
-    );
-    const velocity = force.multiply(frameTime / 1000); // Scale by frame time
-    const newPos = pos.add(velocity);
-
-    visualState.paperBoards[board.uuid].position = newPos;
   }
 }
 
@@ -214,6 +68,43 @@ export default {
   },
   props: {},
   methods: {
+    onMouseDown(event: paper.MouseEvent) {
+      this.startBoardDrag(event);
+    },
+    startBoardDrag(event: paper.MouseEvent) {
+      // Identify if a board was clicked
+      const hitBoard = paper.project.hitTest(event.point, {
+        fill: true,
+        tolerance: 5,
+      });
+      if (hitBoard) {
+        // The group is not hit, its children are. So get the parent
+        const boardGroup = hitBoard.item.parent as paper.Group;
+        const boardData = boardGroup.data as BoardData | undefined;
+        if (!boardData) return;
+        const uuid = boardData.boardUUID;
+        const board = this.gameState?.paperBoards[uuid];
+        if (!board) return;
+
+        // Set the selected board UUID in the game state
+        this.gameState!.selectedBoardUUID = uuid;
+
+        // Move the board to the mouse position
+        board.position = event.point;
+      }
+    },
+    onMouseDrag(event: paper.MouseEvent) {
+      if (!this.gameState!.selectedBoardUUID) return;
+      const board =
+        this.gameState!.paperBoards[this.gameState!.selectedBoardUUID];
+      if (!board) return;
+
+      // Move the board to the mouse position
+      board.position = event.point;
+    },
+    onMouseUp(event: paper.MouseEvent) {
+      this.gameState!.selectedBoardUUID = null;
+    },
     redrawFunc(event: RedrawEvent, project: paper.Project, view: paper.View) {
       // console.log("Redrawing with state:", state);
       const primaryColor = new paper.Color(getDaisyUIColor("--color-primary"));
@@ -233,6 +124,12 @@ export default {
         paperBoards.forEach((board, index) => {
           board.position = initialPositions[index];
         });
+
+        const t = new paper.Tool();
+        t.onMouseDown = this.onMouseDown;
+        t.onMouseDrag = this.onMouseDrag;
+        t.onMouseUp = this.onMouseUp;
+        t.activate();
       } else {
         // Update positions based on forces
         // Center point attraction
@@ -240,7 +137,7 @@ export default {
         // Center line attraction
         //   const centerPoint = centerLine(view);
 
-        updatePositions(this.gameState!, event.delta * timeScale, centerPoint);
+        this.gameState.updatePositions(event.delta, centerPoint);
       }
 
       const groups = [] as paper.Group[];
@@ -248,10 +145,35 @@ export default {
         const boardGroup = board.draw();
         groups.push(boardGroup);
       }
-
-      project.activeLayer.fitBounds(view.bounds.scale(0.75), false);
-      project.activeLayer.removeChildren();
       project.activeLayer.addChildren(groups);
+      if (!this.gameState!.selectedBoardUUID) {
+        // If no board is being dragged, fit all boards in view
+        // Translate to center
+        const allBounds = project.activeLayer.bounds;
+        const centerOffset = view.center.subtract(allBounds.center);
+        project.activeLayer.translate(centerOffset);
+
+        // Scale
+        const vScaleFactor = view.size.width / allBounds.width;
+        const hScaleFactor = view.size.height / allBounds.height;
+        const scaleFactor = Math.min(vScaleFactor, hScaleFactor) * 0.9; // Add some padding
+        view.zoom *= scaleFactor;
+        this.gameState!.zoomLevel = view.zoom;
+      } else {
+        // If a board is being dragged, ensure the zoom level remains constant
+        view.zoom = this.gameState!.zoomLevel;
+      }
+
+      if (this.gameState!.selectedBoardUUID) {
+        // Ensure the dragged board is fully visible
+        const selectedBoard =
+          this.gameState!.paperBoards[this.gameState!.selectedBoardUUID];
+        if (selectedBoard) {
+          groups
+            .find((g) => (g.data as BoardData).boardUUID === selectedBoard.uuid)
+            ?.bringToFront();
+        }
+      }
     },
   },
   setup() {

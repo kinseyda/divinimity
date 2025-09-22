@@ -22,10 +22,80 @@ export type TileData = {
   y: number;
 };
 
-interface BoardData {
+export interface BoardData {
   // Data object for each board. When using hit testing, the item returned
   // will have this data object attached to it.
   boardUUID: string;
+}
+
+/**
+ * Finds the minimum distance between two rectangles.
+ * @param rectA
+ * @param rectB
+ */
+function rectangleDistance(
+  rectA: paper.Rectangle,
+  rectB: paper.Rectangle,
+  padding: number
+): number {
+  // If they overlap, the distance is zero
+  if (rectA.intersects(rectB, padding)) return 0;
+
+  const dx = Math.max(
+    0,
+    rectA.left > rectB.right
+      ? rectA.left - rectB.right
+      : rectB.left > rectA.right
+      ? rectB.left - rectA.right
+      : 0
+  );
+  const dy = Math.max(
+    0,
+    rectA.top > rectB.bottom
+      ? rectA.top - rectB.bottom
+      : rectB.top > rectA.bottom
+      ? rectB.top - rectA.bottom
+      : 0
+  );
+
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/**
+ * Calculates the minimum translation vector to separate two overlapping rectangles.
+ * If the rectangles do not overlap, returns a zero vector.
+ */
+function minimumTranslationVector(
+  rectA: paper.Rectangle,
+  rectB: paper.Rectangle,
+  padding: number
+): paper.Point {
+  if (!rectA.intersects(rectB, padding)) {
+    return new paper.Point(0, 0);
+  }
+
+  const overlapX =
+    rectA.width / 2 +
+    rectB.width / 2 -
+    Math.abs(rectA.center.x - rectB.center.x) +
+    padding;
+  const overlapY =
+    rectA.height / 2 +
+    rectB.height / 2 -
+    Math.abs(rectA.center.y - rectB.center.y) +
+    padding;
+
+  if (overlapX < overlapY) {
+    return new paper.Point(
+      rectA.center.x < rectB.center.x ? -overlapX : overlapX,
+      0
+    );
+  } else {
+    return new paper.Point(
+      0,
+      rectA.center.y < rectB.center.y ? -overlapY : overlapY
+    );
+  }
 }
 
 export class PaperBoard {
@@ -123,6 +193,13 @@ export class PaperBoard {
 
 export class VisualState extends BaseState {
   paperBoards: Record<string, PaperBoard> = {}; // PaperBoard instances indexed by board UUIDs
+  selectedBoardUUID: string | null = null; // UUID of the currently selected board, if any
+  zoomLevel = 1; // Current zoom level of the view
+
+  static repulsionStrength = 50000;
+  static attractionStrength = 1000;
+  static timeScale = 1; // Adjust this to speed up or slow down the pseudo-physics simulation
+  static boardPadding = 50; // Minimum distance between boards
 
   constructor(players: Player[], boards: Board[]) {
     super(players, boards);
@@ -152,5 +229,92 @@ export class VisualState extends BaseState {
    */
   boundingRect(uuid: string): paper.Rectangle {
     return this.paperBoards[uuid].bounds;
+  }
+
+  /**
+   * Update the positions of boards based on repulsion and attraction forces.
+   * Values are modified in-place. The currently selected board (if any) is not
+   * moved by the simulation.
+   * @param boards
+   * @param visualState
+   * @param frameTime - Time elapsed since last frame in milliseconds
+   * @param attractionPath - A path that boards are attracted to (e.g., a center
+   * line or point)
+   */
+  updatePositions(
+    frameTime: number,
+    attractionPath: paper.Path | paper.Point
+  ): void {
+    const boards = Object.values(this.paperBoards);
+    const forces: Record<string, paper.Point> = {};
+    for (const board of boards) {
+      forces[board.uuid] = new paper.Point(0, 0);
+    }
+
+    // Calculate repulsion forces between boards
+    for (const board of boards) {
+      if (this.selectedBoardUUID === board.uuid) continue;
+      const rectA = this.boundingRect(board.uuid);
+
+      for (const otherBoard of boards) {
+        if (otherBoard.uuid === board.uuid) continue;
+        // if (this.selectedBoardUUID === otherBoard.uuid) continue; // Collisions with the selected board are ignored
+        const rectB = this.boundingRect(otherBoard.uuid);
+
+        const distance = rectangleDistance(
+          rectA,
+          rectB,
+          VisualState.boardPadding
+        );
+        const centerPointDistance = rectA.center.getDistance(rectB.center);
+        const direction = rectA.center.subtract(rectB.center).normalize();
+        const forceMagnitude =
+          VisualState.repulsionStrength /
+          (centerPointDistance * centerPointDistance); // Inverse square law
+        let force = direction.multiply(forceMagnitude);
+        if (distance === 0) {
+          // If overlapping, apply mtv to separate them
+          const mtv = minimumTranslationVector(
+            rectA,
+            rectB,
+            VisualState.boardPadding
+          );
+          force = mtv.multiply(VisualState.repulsionStrength);
+        }
+        forces[board.uuid] = forces[board.uuid].add(force);
+      }
+    }
+
+    // Calculate attraction forces towards the attraction path or point
+    for (const board of boards) {
+      if (this.selectedBoardUUID === board.uuid) continue;
+      const pos = new paper.Point(
+        this.paperBoards[board.uuid].position.x,
+        this.paperBoards[board.uuid].position.y
+      );
+      let closestPoint: paper.Point;
+      if (attractionPath instanceof paper.Path) {
+        closestPoint = attractionPath.getNearestPoint(pos) || pos;
+      } else {
+        closestPoint = attractionPath;
+      }
+      const delta = closestPoint.subtract(pos);
+      const forceMagnitude = VisualState.attractionStrength * delta.length;
+      const force = delta.normalize().multiply(forceMagnitude);
+      forces[board.uuid] = forces[board.uuid].add(force);
+    }
+
+    // Update positions based on calculated forces
+    for (const board of boards) {
+      const force = forces[board.uuid];
+      const pos = new paper.Point(
+        this.paperBoards[board.uuid].position.x,
+        this.paperBoards[board.uuid].position.y
+      );
+      const velocity = force.multiply(frameTime / 1000); // Scale by frame time
+      const newPos = pos.add(velocity);
+
+      this.paperBoards[board.uuid].position = newPos;
+    }
   }
 }

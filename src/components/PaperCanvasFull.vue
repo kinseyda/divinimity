@@ -5,6 +5,7 @@
 <script lang="ts">
 import paper from "paper";
 import type { RedrawEvent } from "./PaperUtils";
+
 export default {
   data() {
     return {};

@@ -30,7 +30,7 @@ export default {
       view: paper.View
     ) {
       // Clear the canvas
-      paper.project.activeLayer.removeChildren();
+      paper.project.clear();
       // Call the redraw function passed as a prop
       this.redrawFunction(event, project, view);
     },

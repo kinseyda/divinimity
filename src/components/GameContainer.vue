@@ -68,44 +68,39 @@ export default {
   },
   props: {},
   methods: {
-    onMouseDown(event: paper.MouseEvent) {
-      this.startBoardDrag(event);
-    },
-    startBoardDrag(event: paper.MouseEvent) {
-      // Identify if a board was clicked
-      const hitBoard = paper.project.hitTest(event.point, {
-        fill: true,
-        tolerance: 5,
-      });
-      if (hitBoard) {
-        // The group is not hit, its children are. So get the parent
-        const boardGroup = hitBoard.item.parent as paper.Group;
-        const boardData = boardGroup.data as BoardData | undefined;
-        if (!boardData) return;
-        const uuid = boardData.boardUUID;
-        const board = this.gameState?.paperBoards[uuid];
-        if (!board) return;
+    newGame() {
+      const testBoard1 = newBoard({ width: 5, height: 3 }, [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+        { x: 2, y: 2 },
+      ]);
+      const testBoard2 = newBoard({ width: 3, height: 5 }, [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+        { x: 2, y: 2 },
+      ]);
 
-        // Set the selected board UUID in the game state
-        this.gameState!.selectedBoardUUID = uuid;
+      const testBoard3 = newBoard({ width: 7, height: 3 }, [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+        { x: 2, y: 2 },
+      ]);
+      const testBoard4 = newBoard({ width: 2, height: 4 }, [
+        { x: 0, y: 0 },
+        { x: 1, y: 1 },
+      ]);
 
-        // Move the board to the mouse position
-        board.position = event.point;
-      }
-    },
-    onMouseDrag(event: paper.MouseEvent) {
-      if (!this.gameState!.selectedBoardUUID) return;
-      const board =
-        this.gameState!.paperBoards[this.gameState!.selectedBoardUUID];
-      if (!board) return;
+      const objectGroup = new paper.Group();
+      const overlayGroup = new paper.Group();
 
-      // Move the board to the mouse position
-      board.position = event.point;
-    },
-    onMouseUp(event: paper.MouseEvent) {
-      this.gameState!.selectedBoardUUID = null;
+      const testGame = new Game(
+        new VisualState([], [testBoard1, testBoard2, testBoard3, testBoard4])
+      );
+      this.gameState = testGame.getState();
     },
     redrawFunc(event: RedrawEvent, project: paper.Project, view: paper.View) {
+      if (!this.gameState) return;
+
       // console.log("Redrawing with state:", state);
       const primaryColor = new paper.Color(getDaisyUIColor("--color-primary"));
       const secondaryColor = new paper.Color(
@@ -131,15 +126,11 @@ export default {
           board.position = initialPositions[index];
         });
 
-        const t = new paper.Tool();
-        t.onMouseDown = this.onMouseDown;
-        t.onMouseDrag = this.onMouseDrag;
-        t.onMouseUp = this.onMouseUp;
-        t.activate();
+        this.gameState!.sliceTool.activate();
       } else {
         // Update positions based on forces
         // Center point attraction
-        const centerPoint = view.center;
+        const centerPoint = new paper.Point(0, 0);
         // Center line attraction
         //   const centerPoint = centerLine(view);
 
@@ -147,27 +138,56 @@ export default {
       }
 
       const groups = [] as paper.Group[];
+      const overlayGroup = new paper.Group();
       for (const board of paperBoards) {
-        const boardGroup = board.draw(errorColor, baseColor, primaryColor);
+        const boardGroup = board.renderToGroup(
+          errorColor,
+          baseColor,
+          primaryColor
+        );
         groups.push(boardGroup);
+
+        // Add the slice marker if active
+        if (this.gameState.sliceIndicator) {
+          const { boardUUID, direction, index } = this.gameState.sliceIndicator;
+          const board = this.gameState.paperBoards[boardUUID];
+          if (board) {
+            const sliceMarker = this.gameState.renderSliceIndicator(
+              boardUUID,
+              direction,
+              index,
+              infoColor,
+              10
+            );
+            if (sliceMarker) {
+              overlayGroup.addChild(sliceMarker);
+            }
+          }
+        }
       }
-      project.activeLayer.addChildren(groups);
+
       if (!this.gameState!.selectedBoardUUID) {
         // If no board is being dragged, fit all boards in view
-        // Translate to center
-        const allBounds = project.activeLayer.bounds;
-        const centerOffset = view.center.subtract(allBounds.center);
-        project.activeLayer.translate(centerOffset);
 
-        // Scale
+        // Disable the overlay groups, they cause issues with bounds calculation
+        overlayGroup.visible = false;
+
+        // Translate view to center
+        const allBounds = project.activeLayer.bounds;
+        project.view.center = allBounds.center;
+        // Zoom to fit all boards with some padding
         const vScaleFactor = view.size.width / allBounds.width;
         const hScaleFactor = view.size.height / allBounds.height;
         const scaleFactor = Math.min(vScaleFactor, hScaleFactor) * 0.9; // Add some padding
-        view.zoom *= scaleFactor;
-        this.gameState!.zoomLevel = view.zoom;
+
+        project.view.zoom *= scaleFactor;
+        this.gameState!.zoomLevel = project.view.zoom;
+
+        // Re-enable overlay group
+        overlayGroup.visible = true;
+        overlayGroup.bringToFront();
       } else {
-        // If a board is being dragged, ensure the zoom level remains constant
-        view.zoom = this.gameState!.zoomLevel;
+        project.view.zoom = this.gameState!.zoomLevel;
       }
 
       if (this.gameState!.selectedBoardUUID) {
@@ -182,38 +202,12 @@ export default {
       }
     },
   },
-  setup() {
-    const testBoard1 = newBoard({ width: 5, height: 3 }, [
-      { x: 0, y: 0 },
-      { x: 1, y: 1 },
-      { x: 2, y: 2 },
-    ]);
-    const testBoard2 = newBoard({ width: 3, height: 5 }, [
-      { x: 0, y: 0 },
-      { x: 1, y: 1 },
-      { x: 2, y: 2 },
-    ]);
-
-    const testBoard3 = newBoard({ width: 7, height: 3 }, [
-      { x: 0, y: 0 },
-      { x: 1, y: 1 },
-      { x: 2, y: 2 },
-    ]);
-    const testBoard4 = newBoard({ width: 2, height: 4 }, [
-      { x: 0, y: 0 },
-      { x: 1, y: 1 },
-    ]);
-    const testGame = new Game(
-      new VisualState([], [testBoard1, testBoard2, testBoard3, testBoard4])
-    );
-
-    return {
-      gameState: testGame.getState(),
-    };
-  },
 };
 </script>
 <template>
+  <button class="btn btn-lg btn-primary fixed m-10" @click="newGame">
+    New Game
+  </button>
   <PaperCanvasFull :redrawFunction="redrawFunc" />
 </template>
 <style scoped>

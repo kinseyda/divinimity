@@ -1,5 +1,8 @@
+import { Group } from "paper/dist/paper-core";
 import {
   BaseState,
+  Direction,
+  type Action,
   type Board,
   type Player,
   type TileCoordinate,
@@ -103,15 +106,15 @@ export class PaperBoard {
   // and its visual representation in Paper.js. It should handle drawing the
   // board, updating it, and providing interaction capabilities.
 
-  static tileSize = { width: 100, height: 100 }; // Pixel size of each tile
+  static baseTileSize = { width: 100, height: 100 }; // Pixel size of each tile
   static tilePadding = 5; // Padding between tiles
 
   /**
    *
    * @param dimensions - width and height in tiles
    * @param markedTiles - coordinates of marked tiles (0-indexed, top-left is (0, 0))
-   * @param position - center position of the board in the Paper.js view
-   */
+   * @param position - center position of the board
+   * */
   constructor(
     public uuid: string,
     public dimensions: { width: number; height: number },
@@ -120,15 +123,15 @@ export class PaperBoard {
   ) {}
 
   public get bounds(): paper.Rectangle {
-    const boardWidth = this.dimensions.width * PaperBoard.tileSize.width;
-    const boardHeight = this.dimensions.height * PaperBoard.tileSize.height;
+    const boardWidth = this.dimensions.width * PaperBoard.baseTileSize.width;
+    const boardHeight = this.dimensions.height * PaperBoard.baseTileSize.height;
     return new paper.Rectangle(
       this.position.subtract(new paper.Point(boardWidth / 2, boardHeight / 2)),
       new paper.Size(boardWidth, boardHeight)
     );
   }
 
-  public draw(
+  public renderToGroup(
     colorMarked: paper.Color,
     colorUnmarked: paper.Color,
     colorGrid: paper.Color
@@ -139,8 +142,8 @@ export class PaperBoard {
     // Draw bar backing
     const rows = this.dimensions.height;
     const cols = this.dimensions.width;
-    const boardWidth = cols * PaperBoard.tileSize.width;
-    const boardHeight = rows * PaperBoard.tileSize.height;
+    const boardWidth = cols * PaperBoard.baseTileSize.width;
+    const boardHeight = rows * PaperBoard.baseTileSize.height;
     const boardRect = new paper.Rectangle(
       this.position.subtract(new paper.Point(boardWidth / 2, boardHeight / 2)),
       new paper.Size(boardWidth, boardHeight)
@@ -152,7 +155,7 @@ export class PaperBoard {
     group.addChild(boardPath);
     // Draw grid lines
     for (let r = 1; r < rows; r++) {
-      const y = boardRect.top + r * PaperBoard.tileSize.height;
+      const y = boardRect.top + r * PaperBoard.baseTileSize.height;
       const line = new paper.Path.Line(
         new paper.Point(boardRect.left, y),
         new paper.Point(boardRect.right, y)
@@ -163,7 +166,7 @@ export class PaperBoard {
     }
 
     for (let c = 1; c < cols; c++) {
-      const x = boardRect.left + c * PaperBoard.tileSize.width;
+      const x = boardRect.left + c * PaperBoard.baseTileSize.width;
       const line = new paper.Path.Line(
         new paper.Point(x, boardRect.top),
         new paper.Point(x, boardRect.bottom)
@@ -178,11 +181,14 @@ export class PaperBoard {
       const tileRect = new paper.Rectangle(
         boardRect.topLeft.add(
           new paper.Point(
-            tile.x * PaperBoard.tileSize.width,
-            tile.y * PaperBoard.tileSize.height
+            tile.x * PaperBoard.baseTileSize.width,
+            tile.y * PaperBoard.baseTileSize.height
           )
         ),
-        new paper.Size(PaperBoard.tileSize.width, PaperBoard.tileSize.height)
+        new paper.Size(
+          PaperBoard.baseTileSize.width,
+          PaperBoard.baseTileSize.height
+        )
       );
       const tilePath = new paper.Path.Rectangle(tileRect);
       tilePath.fillColor = colorMarked;
@@ -195,9 +201,84 @@ export class PaperBoard {
   }
 }
 
+/**
+ * Quadrants within a tile, split diagonally through the center. i.e square with
+ * an "X" through it.
+ */
+export enum Quadrant {
+  Top,
+  Right,
+  Bottom,
+  Left,
+}
+/**
+ * Given a point and a board, determine which quadrant of which tile the point
+ * is in. Divides the board into an equal grid of tiles, ignoring any visual
+ * clutter that might be on top of it.
+ * @param board
+ * @param point
+ * @returns The tile coordinate and quadrant, or null if the point is outside
+ * the board
+ */
+function pointTileQuadrant(
+  board: PaperBoard,
+  point: paper.Point
+): { tile: TileCoordinate; quadrant: Quadrant } | null {
+  const boardRect = board.bounds;
+  // First, check if the point is within the board bounds
+  if (!(boardRect.topLeft.x <= point.x && point.x <= boardRect.bottomRight.x)) {
+    return null;
+  }
+  if (!(boardRect.topLeft.y <= point.y && point.y <= boardRect.bottomRight.y)) {
+    return null;
+  }
+
+  const boardLocalPoint = point.subtract(boardRect.topLeft);
+  // Determine which tile the point is in
+  // (0,0) is top-left tile
+  // (width-1,height-1) is bottom-right tile
+  const tileX = Math.floor(boardLocalPoint.x / PaperBoard.baseTileSize.width);
+  const tileY = Math.floor(boardLocalPoint.y / PaperBoard.baseTileSize.height);
+
+  // Get the local point within the tile, from (0,0) at top-left to (tileWidth, tileHeight) at bottom-right
+  const tileLocalPoint = new paper.Point(
+    boardLocalPoint.x - tileX * PaperBoard.baseTileSize.width,
+    boardLocalPoint.y - tileY * PaperBoard.baseTileSize.height
+  );
+
+  // Determine the quadrant by comparing the point to the diagonals
+  const tileWidth = PaperBoard.baseTileSize.width;
+  const tileHeight = PaperBoard.baseTileSize.height;
+
+  const centerX = tileWidth / 2;
+  const centerY = tileHeight / 2;
+  const slope = centerY / centerX;
+
+  const bottomOrLeft = tileLocalPoint.y > slope * tileLocalPoint.x;
+  const topOrLeft = tileLocalPoint.y > -slope * tileLocalPoint.x + tileHeight;
+
+  if (bottomOrLeft && topOrLeft) {
+    return { tile: { x: tileX, y: tileY }, quadrant: Quadrant.Bottom };
+  } else if (bottomOrLeft && !topOrLeft) {
+    return { tile: { x: tileX, y: tileY }, quadrant: Quadrant.Left };
+  } else if (!bottomOrLeft && topOrLeft) {
+    return { tile: { x: tileX, y: tileY }, quadrant: Quadrant.Right };
+  } else {
+    return { tile: { x: tileX, y: tileY }, quadrant: Quadrant.Top };
+  }
+
+  return null;
+}
+
 export class VisualState extends BaseState {
   paperBoards: Record<string, PaperBoard> = {}; // PaperBoard instances indexed by board UUIDs
   selectedBoardUUID: string | null = null; // UUID of the currently selected board, if any
+  sliceIndicator: null | {
+    boardUUID: string;
+    direction: Direction;
+    index: number;
+  } = null; // Current slice being drawn, if any
+  mousePosition: paper.Point;
   zoomLevel = 1; // Current zoom level of the view
 
   static repulsionStrength = 50000;
@@ -209,6 +290,14 @@ export class VisualState extends BaseState {
   static unmarkColor = new paper.Color("white");
   static gridLineColor = new paper.Color("black");
 
+  dragTool: paper.Tool;
+  sliceTool: paper.Tool;
+
+  /**
+   * Create a new VisualState instance.
+   * @param players
+   * @param boards
+   */
   constructor(players: Player[], boards: Board[]) {
     super(players, boards);
     // Board positions are initialized at -1,-1 for all boards here since we
@@ -222,6 +311,144 @@ export class VisualState extends BaseState {
         new paper.Point(-1, -1)
       );
     }
+    this.mousePosition = new paper.Point(0, 0);
+
+    const startBoardDrag = (event: paper.MouseEvent) => {
+      const hitBoard = this.hitTestPaperBoard(event.point);
+      if (!hitBoard) return;
+      // Set the selected board UUID in the game state
+      this.selectedBoardUUID = hitBoard.uuid;
+
+      // Move the board to the mouse position
+      hitBoard.position = event.point;
+      this.mousePosition = event.point;
+    };
+    const dragBoard = (event: paper.MouseEvent) => {
+      if (!this.selectedBoardUUID) return;
+      const board = this.paperBoards[this.selectedBoardUUID];
+      if (!board) return;
+
+      // Move the board to the mouse position
+      board.position = event.point;
+      this.mousePosition = event.point;
+    };
+    const endBoardDrag = (event: paper.MouseEvent) => {
+      this.selectedBoardUUID = null;
+      this.mousePosition = new paper.Point(0, 0);
+    };
+
+    this.dragTool = new paper.Tool();
+    this.dragTool.onMouseDown = startBoardDrag;
+    this.dragTool.onMouseDrag = dragBoard;
+    this.dragTool.onMouseUp = endBoardDrag;
+
+    this.sliceTool = new paper.Tool();
+    this.sliceTool.onMouseMove = (event: paper.MouseEvent) => {
+      // If the mouse is over a board, indicate where a slice will be made if you click
+      const hitBoard = this.hitTestPaperBoard(event.point);
+      if (hitBoard) {
+        const statePoint = event.point;
+        const ptq = pointTileQuadrant(hitBoard, statePoint);
+        if (ptq) {
+          const { tile, quadrant } = ptq;
+          let direction: Direction;
+          let index: number;
+          if (quadrant === Quadrant.Top || quadrant === Quadrant.Bottom) {
+            direction = Direction.Horizontal;
+            index = tile.y + (quadrant === Quadrant.Bottom ? 1 : 0);
+          } else {
+            direction = Direction.Vertical;
+            index = tile.x + (quadrant === Quadrant.Right ? 1 : 0);
+          }
+          this.sliceIndicator = {
+            boardUUID: hitBoard.uuid,
+            direction,
+            index,
+          };
+        } else {
+          this.sliceIndicator = null;
+        }
+      } else {
+        this.sliceIndicator = null;
+      }
+    };
+
+    const switchToSlice = (event: paper.KeyEvent) => {
+      if (event.key === "shift") {
+        // If shift is released, stop dragging
+        this.selectedBoardUUID = null;
+        this.sliceTool.activate();
+      }
+    };
+    const switchToDrag = (event: paper.KeyEvent) => {
+      if (event.key === "shift") {
+        // If shift is pressed, start dragging
+        this.sliceIndicator = null;
+        this.dragTool.activate();
+      }
+    };
+    this.dragTool.onKeyUp = switchToSlice;
+    this.dragTool.onKeyDown = switchToDrag;
+    this.sliceTool.onKeyUp = switchToSlice;
+    this.sliceTool.onKeyDown = switchToDrag;
+  }
+
+  public renderSliceIndicator(
+    boardUUID: string,
+    direction: Direction,
+    index: number,
+    color: paper.Color,
+    strokeWidth: number,
+    overDrawPadding = 20
+  ): paper.Path | null {
+    const board = this.paperBoards[boardUUID];
+    if (!board) return null;
+    const rows = board.dimensions.height;
+    const cols = board.dimensions.width;
+    const boardWidth = cols * PaperBoard.baseTileSize.width;
+    const boardHeight = rows * PaperBoard.baseTileSize.height;
+    const boardRect = new paper.Rectangle(
+      board.position.subtract(new paper.Point(boardWidth / 2, boardHeight / 2)),
+      new paper.Size(boardWidth, boardHeight)
+    );
+
+    let line: paper.Path;
+    if (direction === Direction.Horizontal) {
+      if (index < 0 || index > rows) return null; // Out of bounds
+      const y = boardRect.top + index * PaperBoard.baseTileSize.height;
+      line = new paper.Path.Line(
+        new paper.Point(boardRect.left - overDrawPadding, y),
+        new paper.Point(boardRect.right + overDrawPadding, y)
+      );
+    } else {
+      if (index < 0 || index > cols) return null; // Out of bounds
+      const x = boardRect.left + index * PaperBoard.baseTileSize.width;
+      line = new paper.Path.Line(
+        new paper.Point(x, boardRect.top - overDrawPadding),
+        new paper.Point(x, boardRect.bottom + overDrawPadding)
+      );
+    }
+    line.strokeColor = color;
+    line.strokeWidth = strokeWidth;
+    return line;
+  }
+
+  /**
+   *
+   * @param point
+   * @returns
+   */
+  hitTestPaperBoard(point: paper.Point): PaperBoard | null {
+    const statePoint = point;
+    for (const board of Object.values(this.paperBoards)) {
+      // Check if the point is within the board bounds
+      // Might be more efficient to use paper's built-in hitTest, but its
+      // difficult to convert between points when zoomed/panned
+      if (board.bounds.contains(statePoint)) {
+        return board;
+      }
+    }
+    return null;
   }
 
   postTurnUpdate(turnResult: TurnResult): void {

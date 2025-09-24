@@ -1,4 +1,4 @@
 @import "tailwindcss";
 @plugin "daisyui" {
-  themes: winter --preferslight, night --prefersdark;
+  themes: cmyk --preferslight, luxury --prefersdark;
 }

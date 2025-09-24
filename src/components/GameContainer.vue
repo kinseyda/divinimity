@@ -10,9 +10,10 @@
 import PaperCanvasFull from "./PaperCanvasFull.vue";
 
 import paper from "paper";
-import { Game, newBoard } from "../model/Game";
+import { Game, type Board, type Player } from "../model/Game";
 import { getDaisyUIColor } from "../utils/StyleUtils";
 import {
+  randomBoard,
   VisualState,
   type BoardData,
   type PaperBoard,
@@ -44,7 +45,7 @@ function placeAroundCenter(
 ): paper.Point[] {
   const positions: paper.Point[] = [];
   const angleStep = (2 * Math.PI) / boards.length;
-  const radius = 300;
+  const radius = 500;
   // offset randomly to avoid exact horizontal/vertical alignment, makes for faster stabilization
   const offset = Math.random() * Math.PI * 2;
   for (let i = 0; i < boards.length; i++) {
@@ -69,32 +70,21 @@ export default {
   props: {},
   methods: {
     newGame() {
-      const testBoard1 = newBoard({ width: 5, height: 3 }, [
-        { x: 0, y: 0 },
-        { x: 1, y: 1 },
-        { x: 2, y: 2 },
-      ]);
-      const testBoard2 = newBoard({ width: 3, height: 5 }, [
-        { x: 0, y: 0 },
-        { x: 1, y: 1 },
-        { x: 2, y: 2 },
-      ]);
-
-      const testBoard3 = newBoard({ width: 7, height: 3 }, [
-        { x: 0, y: 0 },
-        { x: 1, y: 1 },
-        { x: 2, y: 2 },
-      ]);
-      const testBoard4 = newBoard({ width: 2, height: 4 }, [
-        { x: 0, y: 0 },
-        { x: 1, y: 1 },
-      ]);
-
-      const objectGroup = new paper.Group();
-      const overlayGroup = new paper.Group();
+      const boards = [] as Board[];
+      boards.push(randomBoard());
+      boards.push(randomBoard());
+      boards.push(randomBoard());
+      boards.push(randomBoard());
 
       const testGame = new Game(
-        new VisualState([], [testBoard1, testBoard2, testBoard3, testBoard4])
+        new VisualState([], boards, (slice, boardUUID) => {
+          const board = testGame.getState().boards[boardUUID];
+          if (!board) return;
+          testGame.playTurn({
+            player: {} as Player,
+            action: { board, slice },
+          });
+        })
       );
       this.gameState = testGame.getState();
     },
@@ -106,6 +96,7 @@ export default {
       const secondaryColor = new paper.Color(
         getDaisyUIColor("--color-secondary")
       );
+      const accentColor = new paper.Color(getDaisyUIColor("--color-accent"));
       const warningColor = new paper.Color(getDaisyUIColor("--color-warning"));
       const successColor = new paper.Color(getDaisyUIColor("--color-success"));
       const errorColor = new paper.Color(getDaisyUIColor("--color-error"));
@@ -121,7 +112,10 @@ export default {
       ) {
         // Initial placement around center if all positions are uninitialized
         const center = view.center;
-        const initialPositions = placeAroundCenter(paperBoards, center);
+        const initialPositions = placeAroundCenter(
+          paperBoards,
+          new paper.Point(0, 0)
+        );
         paperBoards.forEach((board, index) => {
           board.position = initialPositions[index];
         });
@@ -185,8 +179,8 @@ export default {
 
         // Re-enable overlay group
         overlayGroup.visible = true;
-        overlayGroup.bringToFront();
       } else {
+        // If a board is being dragged, don't adjust the view
         project.view.zoom = this.gameState!.zoomLevel;
       }
 
@@ -200,6 +194,25 @@ export default {
             ?.bringToFront();
         }
       }
+
+      const underlayGroup = new paper.Group();
+      // Simple axis underlay
+      underlayGroup.addChild(
+        new paper.Path.Line(
+          new paper.Point(-10000, 0),
+          new paper.Point(10000, 0)
+        )
+      );
+      underlayGroup.addChild(
+        new paper.Path.Line(
+          new paper.Point(0, -10000),
+          new paper.Point(0, 10000)
+        )
+      );
+      underlayGroup.strokeColor = baseColor;
+      underlayGroup.strokeWidth = 5;
+      underlayGroup.sendToBack();
+      overlayGroup.bringToFront();
     },
   },
 };

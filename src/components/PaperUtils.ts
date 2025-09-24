@@ -1,10 +1,10 @@
-import { Group } from "paper/dist/paper-core";
 import {
   BaseState,
   Direction,
-  type Action,
+  newBoard,
   type Board,
   type Player,
+  type Slice,
   type TileCoordinate,
   type TurnResult,
 } from "../model/Game";
@@ -99,6 +99,35 @@ function minimumTranslationVector(
       rectA.center.y < rectB.center.y ? -overlapY : overlapY
     );
   }
+}
+
+export function randomBoard(
+  minDimension = 2,
+  maxDimension = 8,
+  minMarks = 1,
+  maxMarks = 3
+): Board {
+  const width =
+    Math.floor(Math.random() * (maxDimension - minDimension + 1)) +
+    minDimension;
+  const height =
+    Math.floor(Math.random() * (maxDimension - minDimension + 1)) +
+    minDimension;
+  const numMarks =
+    Math.floor(Math.random() * (maxMarks - minMarks + 1)) + minMarks;
+  const markedCoordinates: TileCoordinate[] = [];
+  const occupied = new Set<string>();
+  while (markedCoordinates.length < numMarks) {
+    const x = Math.floor(Math.random() * width);
+    const y = Math.floor(Math.random() * height);
+    const key = `${x},${y}`;
+    if (!occupied.has(key)) {
+      occupied.add(key);
+      markedCoordinates.push({ x, y });
+    }
+  }
+
+  return newBoard({ width, height }, markedCoordinates);
 }
 
 export class PaperBoard {
@@ -201,6 +230,19 @@ export class PaperBoard {
   }
 }
 
+function tileQuadrantToSlice(tile: TileCoordinate, quadrant: Quadrant): Slice {
+  let direction: Direction;
+  let index: number;
+  if (quadrant === Quadrant.Top || quadrant === Quadrant.Bottom) {
+    direction = Direction.Horizontal;
+    index = tile.y + (quadrant === Quadrant.Bottom ? 1 : 0);
+  } else {
+    direction = Direction.Vertical;
+    index = tile.x + (quadrant === Quadrant.Right ? 1 : 0);
+  }
+  return { direction, line: index };
+}
+
 /**
  * Quadrants within a tile, split diagonally through the center. i.e square with
  * an "X" through it.
@@ -278,7 +320,6 @@ export class VisualState extends BaseState {
     direction: Direction;
     index: number;
   } = null; // Current slice being drawn, if any
-  mousePosition: paper.Point;
   zoomLevel = 1; // Current zoom level of the view
 
   static repulsionStrength = 50000;
@@ -293,13 +334,24 @@ export class VisualState extends BaseState {
   dragTool: paper.Tool;
   sliceTool: paper.Tool;
 
+  sliceCallback: (slice: Slice, boardUUID: string) => void;
+  // Called when a slice is made via the UI. This function should be set by the
+  // user of the VisualState class, and should handle updating the game state
+  // accordingly. This may be different if the game state is local vs remote,
+  // for instance.
+
   /**
    * Create a new VisualState instance.
    * @param players
    * @param boards
    */
-  constructor(players: Player[], boards: Board[]) {
+  constructor(
+    players: Player[],
+    boards: Board[],
+    sliceCallback: (slice: Slice, boardUUID: string) => void
+  ) {
     super(players, boards);
+    this.sliceCallback = sliceCallback;
     // Board positions are initialized at -1,-1 for all boards here since we
     // don't know the canvas dimensions. They will be updated later to be
     // placed around the center of the canvas, but before the first render.
@@ -311,8 +363,6 @@ export class VisualState extends BaseState {
         new paper.Point(-1, -1)
       );
     }
-    this.mousePosition = new paper.Point(0, 0);
-
     const startBoardDrag = (event: paper.MouseEvent) => {
       const hitBoard = this.hitTestPaperBoard(event.point);
       if (!hitBoard) return;
@@ -321,7 +371,6 @@ export class VisualState extends BaseState {
 
       // Move the board to the mouse position
       hitBoard.position = event.point;
-      this.mousePosition = event.point;
     };
     const dragBoard = (event: paper.MouseEvent) => {
       if (!this.selectedBoardUUID) return;
@@ -330,11 +379,9 @@ export class VisualState extends BaseState {
 
       // Move the board to the mouse position
       board.position = event.point;
-      this.mousePosition = event.point;
     };
     const endBoardDrag = (event: paper.MouseEvent) => {
       this.selectedBoardUUID = null;
-      this.mousePosition = new paper.Point(0, 0);
     };
 
     this.dragTool = new paper.Tool();
@@ -347,23 +394,13 @@ export class VisualState extends BaseState {
       // If the mouse is over a board, indicate where a slice will be made if you click
       const hitBoard = this.hitTestPaperBoard(event.point);
       if (hitBoard) {
-        const statePoint = event.point;
-        const ptq = pointTileQuadrant(hitBoard, statePoint);
+        const ptq = pointTileQuadrant(hitBoard, event.point);
         if (ptq) {
-          const { tile, quadrant } = ptq;
-          let direction: Direction;
-          let index: number;
-          if (quadrant === Quadrant.Top || quadrant === Quadrant.Bottom) {
-            direction = Direction.Horizontal;
-            index = tile.y + (quadrant === Quadrant.Bottom ? 1 : 0);
-          } else {
-            direction = Direction.Vertical;
-            index = tile.x + (quadrant === Quadrant.Right ? 1 : 0);
-          }
+          const slice = tileQuadrantToSlice(ptq.tile, ptq.quadrant);
           this.sliceIndicator = {
             boardUUID: hitBoard.uuid,
-            direction,
-            index,
+            direction: slice.direction,
+            index: slice.line,
           };
         } else {
           this.sliceIndicator = null;
@@ -371,6 +408,17 @@ export class VisualState extends BaseState {
       } else {
         this.sliceIndicator = null;
       }
+    };
+    this.sliceTool.onMouseDown = (event: paper.MouseEvent) => {
+      // If the mouse is over a board, make a slice
+      const hitBoard = this.hitTestPaperBoard(event.point);
+      if (!hitBoard) return;
+
+      const ptq = pointTileQuadrant(hitBoard, event.point);
+      if (!ptq) return;
+
+      const slice = tileQuadrantToSlice(ptq.tile, ptq.quadrant);
+      this.sliceCallback(slice, hitBoard.uuid);
     };
 
     const switchToSlice = (event: paper.KeyEvent) => {
@@ -439,12 +487,11 @@ export class VisualState extends BaseState {
    * @returns
    */
   hitTestPaperBoard(point: paper.Point): PaperBoard | null {
-    const statePoint = point;
     for (const board of Object.values(this.paperBoards)) {
       // Check if the point is within the board bounds
       // Might be more efficient to use paper's built-in hitTest, but its
       // difficult to convert between points when zoomed/panned
-      if (board.bounds.contains(statePoint)) {
+      if (board.bounds.contains(point)) {
         return board;
       }
     }
@@ -454,9 +501,106 @@ export class VisualState extends BaseState {
   postTurnUpdate(turnResult: TurnResult): void {
     // Update the visual representation of the boards based on the turn result.
     // The new bars will need to be placed where the old one was
-    //   TODO
-  }
 
+    // First determine which paper board to replace
+    const oldBoard = this.paperBoards[turnResult.turn.action.board.uuid];
+    if (!oldBoard) {
+      console.warn(
+        "Old board not found in visual state:",
+        turnResult.turn.action.board.uuid
+      );
+      return;
+    }
+    const oldPosition = oldBoard.position;
+    const oldTopLeft = oldBoard.bounds.topLeft;
+
+    // Remove the old board
+    delete this.paperBoards[oldBoard.uuid];
+
+    // Add the new boards at the same position as the old one. The starting
+    // positions should be based upon the centers of the new boards, so that
+    // their tiles are exactly where they were before the slice. So, on a
+    // vertical slice, one board will be positioned to the left of the old
+    // board's center, and the other to the right.
+    const newBoards = turnResult.sliceResult.boards;
+    if (newBoards.reducedBoard === null && newBoards.childBoard === null) {
+      console.warn("No new boards created from slice:", turnResult);
+      return;
+    }
+    const oldBoardWidth = oldBoard.dimensions.width;
+    const oldBoardHeight = oldBoard.dimensions.height;
+
+    const reducedBoard = newBoards.reducedBoard;
+    const childBoard = newBoards.childBoard;
+
+    if (turnResult.turn.action.slice.direction === Direction.Vertical) {
+      // Vertical slice, so new boards are side by side
+      if (reducedBoard) {
+        this.paperBoards[reducedBoard.uuid] = new PaperBoard(
+          reducedBoard.uuid,
+          reducedBoard.dimensions,
+          reducedBoard.markedCoordinates,
+          oldPosition.add(
+            new paper.Point(
+              -(
+                (oldBoardWidth - reducedBoard.dimensions.width) *
+                PaperBoard.baseTileSize.width
+              ) / 2,
+              0
+            )
+          )
+        );
+      }
+      if (childBoard) {
+        this.paperBoards[childBoard.uuid] = new PaperBoard(
+          childBoard.uuid,
+          childBoard.dimensions,
+          childBoard.markedCoordinates,
+          oldPosition.add(
+            new paper.Point(
+              ((oldBoardWidth - childBoard.dimensions.width) *
+                PaperBoard.baseTileSize.width) /
+                2,
+              0
+            )
+          )
+        );
+      }
+    } else {
+      // Horizontal slice, so new boards are stacked vertically
+      if (reducedBoard) {
+        this.paperBoards[reducedBoard.uuid] = new PaperBoard(
+          reducedBoard.uuid,
+          reducedBoard.dimensions,
+          reducedBoard.markedCoordinates,
+          oldPosition.add(
+            new paper.Point(
+              0,
+              -(
+                (oldBoardHeight - reducedBoard.dimensions.height) *
+                PaperBoard.baseTileSize.height
+              ) / 2
+            )
+          )
+        );
+      }
+      if (childBoard) {
+        this.paperBoards[childBoard.uuid] = new PaperBoard(
+          childBoard.uuid,
+          childBoard.dimensions,
+          childBoard.markedCoordinates,
+          oldPosition.add(
+            new paper.Point(
+              0,
+              ((oldBoardHeight - childBoard.dimensions.height) *
+                PaperBoard.baseTileSize.height) /
+                2
+            )
+          )
+        );
+      }
+    }
+  }
   /**
    * Get the bounding box for a given board in the visual state.
    * @param visualState

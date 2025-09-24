@@ -67,7 +67,10 @@ export interface WinCondition<TState extends BaseState> {
 }
 
 export interface SliceResult {
-  boards: Board[];
+  boards: {
+    reducedBoard: Board | null; // The left or top of the sliced board. Will be null if this part of the board was removed due to not having any marked coordinates.
+    childBoard: Board | null; // The right or bottom of the sliced board. Will be null if this part of the board was removed due to not having any marked coordinates.
+  };
   removedBoards: Board[]; // Will all have either zero marked coordinates, or be a single 1x1 board that is marked
 }
 
@@ -78,7 +81,7 @@ export interface TurnResult {
   sliceResult: SliceResult;
 }
 
-export function slice(board: Board, slice: Slice): SliceResult | null {
+export function sliceBoard(board: Board, slice: Slice): SliceResult | null {
   // Apply a slice on a board.
   // Returns null if the slice is invalid (out of bounds).
   // Does not return any boards that do not have a marked coordinate.
@@ -119,34 +122,62 @@ export function slice(board: Board, slice: Slice): SliceResult | null {
     }
   }
 
-  let boards = [
-    newBoard(
-      {
-        width: board.dimensions.width,
-        height: sliceIndex,
-      },
+  let reducedBoard: Board | null = null;
+  let childBoard: Board | null = null;
+
+  if (sliceDir == Direction.Horizontal) {
+    reducedBoard = newBoard(
+      { width: board.dimensions.width, height: sliceIndex },
       topOrLeftCoords
-    ),
-    newBoard(
+    );
+    childBoard = newBoard(
       {
         width: board.dimensions.width,
         height: board.dimensions.height - sliceIndex,
       },
       bottomOrRightCoords
-    ),
-  ];
+    );
+  } else if (sliceDir == Direction.Vertical) {
+    reducedBoard = newBoard(
+      { width: sliceIndex, height: board.dimensions.height },
+      topOrLeftCoords
+    );
+    childBoard = newBoard(
+      {
+        width: board.dimensions.width - sliceIndex,
+        height: board.dimensions.height,
+      },
+      bottomOrRightCoords
+    );
+  }
 
-  const removedBoards = boards.filter(
-    (b) =>
-      b.markedCoordinates.length === 0 ||
-      (b.dimensions.width === 1 &&
-        b.dimensions.height === 1 &&
-        b.markedCoordinates.length === 1)
-  );
-  boards = boards.filter((b) => !removedBoards.includes(b));
+  const removedBoards = [];
+  if (
+    (reducedBoard &&
+      reducedBoard.dimensions.width === 1 &&
+      reducedBoard.dimensions.height === 1 &&
+      reducedBoard.markedCoordinates.length === 1) ||
+    (reducedBoard && reducedBoard.markedCoordinates.length === 0)
+  ) {
+    removedBoards.push(reducedBoard);
+    reducedBoard = null;
+  }
+  if (
+    (childBoard &&
+      childBoard.dimensions.width === 1 &&
+      childBoard.dimensions.height === 1 &&
+      childBoard.markedCoordinates.length === 1) ||
+    (childBoard && childBoard.markedCoordinates.length === 0)
+  ) {
+    removedBoards.push(childBoard);
+    childBoard = null;
+  }
 
   return {
-    boards,
+    boards: {
+      reducedBoard,
+      childBoard: childBoard,
+    },
     removedBoards,
   };
 }
@@ -183,7 +214,37 @@ export class Game<TState extends BaseState> {
   }
 
   public simulateTurn(turn: Turn): TState {
-    return this.state;
+    const { slice, board } = turn.action;
+    const targetBoard = this.state.boards[board.uuid];
+    if (!targetBoard) {
+      throw new Error("Target board not found in current state");
+    }
+    const sliceResult = sliceBoard(targetBoard, slice);
+    if (!sliceResult) {
+      throw new Error("Invalid slice");
+    }
+    const newBoards = { ...this.state.boards };
+    // Remove the target board
+    delete newBoards[targetBoard.uuid];
+    // Add the new boards
+    for (const board of [
+      sliceResult.boards.reducedBoard,
+      sliceResult.boards.childBoard,
+    ].filter((b) => b !== null) as Board[]) {
+      newBoards[board.uuid] = board;
+    }
+    const newState = Object.create(this.state.constructor.prototype) as TState;
+    Object.assign(newState, this.state);
+    newState.boards = newBoards;
+    const turnResult: TurnResult = {
+      turn,
+      inState: this.state,
+      outState: newState,
+      sliceResult,
+    };
+    newState.postTurnUpdate(turnResult);
+
+    return newState;
   }
 
   public playTurn(turn: Turn): void {

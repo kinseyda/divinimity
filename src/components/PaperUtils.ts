@@ -2,8 +2,10 @@ import {
   BaseState,
   Direction,
   newBoard,
+  Player,
+  type Action,
   type Board,
-  type Player,
+  type PlayerInfo,
   type Slice,
   type TileCoordinate,
   type TurnResult,
@@ -103,9 +105,9 @@ function minimumTranslationVector(
 
 export function randomBoard(
   minDimension = 2,
-  maxDimension = 8,
+  maxDimension = 10,
   minMarks = 1,
-  maxMarks = 3
+  maxMarks = 10
 ): Board {
   const width =
     Math.floor(Math.random() * (maxDimension - minDimension + 1)) +
@@ -117,7 +119,10 @@ export function randomBoard(
     Math.floor(Math.random() * (maxMarks - minMarks + 1)) + minMarks;
   const markedCoordinates: TileCoordinate[] = [];
   const occupied = new Set<string>();
-  while (markedCoordinates.length < numMarks) {
+  while (
+    markedCoordinates.length < numMarks &&
+    occupied.size < width * height
+  ) {
     const x = Math.floor(Math.random() * width);
     const y = Math.floor(Math.random() * height);
     const key = `${x},${y}`;
@@ -223,14 +228,25 @@ export class PaperBoard {
       tilePath.fillColor = colorMarked;
       tilePath.strokeColor = colorGrid;
       tilePath.strokeWidth = 1;
+
       group.addChild(tilePath);
     }
 
+    // Mask to round corners
+    const mask = new paper.Path.Rectangle(boardRect, new paper.Size(25, 25));
+    mask.strokeColor = colorGrid;
+    mask.strokeWidth = 4;
+    group.addChild(mask); // Used for showing the border on top of everything
+    group.insertChild(0, mask.clone()); // Used for the clipping mask
+    group.clipped = true;
     return group;
   }
 }
 
-function tileQuadrantToSlice(tile: TileCoordinate, quadrant: Quadrant): Slice {
+export function tileQuadrantToSlice(
+  tile: TileCoordinate,
+  quadrant: Quadrant
+): Slice {
   let direction: Direction;
   let index: number;
   if (quadrant === Quadrant.Top || quadrant === Quadrant.Bottom) {
@@ -262,7 +278,7 @@ export enum Quadrant {
  * @returns The tile coordinate and quadrant, or null if the point is outside
  * the board
  */
-function pointTileQuadrant(
+export function pointTileQuadrant(
   board: PaperBoard,
   point: paper.Point
 ): { tile: TileCoordinate; quadrant: Quadrant } | null {
@@ -322,23 +338,17 @@ export class VisualState extends BaseState {
   } = null; // Current slice being drawn, if any
   zoomLevel = 1; // Current zoom level of the view
 
-  static repulsionStrength = 50000;
-  static attractionStrength = 1000;
-  static timeScale = 1; // Adjust this to speed up or slow down the pseudo-physics simulation
-  static boardPadding = 50; // Minimum distance between boards
+  static repulsionStrength = 5000;
+  static attractionStrength = 100;
+  static timeScale = 1;
+  static boardPadding = 50;
 
   static markColor = new paper.Color("red");
   static unmarkColor = new paper.Color("white");
   static gridLineColor = new paper.Color("black");
 
-  dragTool: paper.Tool;
-  sliceTool: paper.Tool;
-
-  sliceCallback: (slice: Slice, boardUUID: string) => void;
-  // Called when a slice is made via the UI. This function should be set by the
-  // user of the VisualState class, and should handle updating the game state
-  // accordingly. This may be different if the game state is local vs remote,
-  // for instance.
+  // Callback to be called after the user makes a slice action.
+  actionCallBack: (slice: Slice, board: Board) => void;
 
   /**
    * Create a new VisualState instance.
@@ -346,12 +356,12 @@ export class VisualState extends BaseState {
    * @param boards
    */
   constructor(
-    players: Player[],
+    players: PlayerInfo[],
     boards: Board[],
-    sliceCallback: (slice: Slice, boardUUID: string) => void
+    actionCallback: (slice: Slice, board: Board) => void
   ) {
     super(players, boards);
-    this.sliceCallback = sliceCallback;
+    this.actionCallBack = actionCallback;
     // Board positions are initialized at -1,-1 for all boards here since we
     // don't know the canvas dimensions. They will be updated later to be
     // placed around the center of the canvas, but before the first render.
@@ -363,82 +373,6 @@ export class VisualState extends BaseState {
         new paper.Point(-1, -1)
       );
     }
-    const startBoardDrag = (event: paper.MouseEvent) => {
-      const hitBoard = this.hitTestPaperBoard(event.point);
-      if (!hitBoard) return;
-      // Set the selected board UUID in the game state
-      this.selectedBoardUUID = hitBoard.uuid;
-
-      // Move the board to the mouse position
-      hitBoard.position = event.point;
-    };
-    const dragBoard = (event: paper.MouseEvent) => {
-      if (!this.selectedBoardUUID) return;
-      const board = this.paperBoards[this.selectedBoardUUID];
-      if (!board) return;
-
-      // Move the board to the mouse position
-      board.position = event.point;
-    };
-    const endBoardDrag = (event: paper.MouseEvent) => {
-      this.selectedBoardUUID = null;
-    };
-
-    this.dragTool = new paper.Tool();
-    this.dragTool.onMouseDown = startBoardDrag;
-    this.dragTool.onMouseDrag = dragBoard;
-    this.dragTool.onMouseUp = endBoardDrag;
-
-    this.sliceTool = new paper.Tool();
-    this.sliceTool.onMouseMove = (event: paper.MouseEvent) => {
-      // If the mouse is over a board, indicate where a slice will be made if you click
-      const hitBoard = this.hitTestPaperBoard(event.point);
-      if (hitBoard) {
-        const ptq = pointTileQuadrant(hitBoard, event.point);
-        if (ptq) {
-          const slice = tileQuadrantToSlice(ptq.tile, ptq.quadrant);
-          this.sliceIndicator = {
-            boardUUID: hitBoard.uuid,
-            direction: slice.direction,
-            index: slice.line,
-          };
-        } else {
-          this.sliceIndicator = null;
-        }
-      } else {
-        this.sliceIndicator = null;
-      }
-    };
-    this.sliceTool.onMouseDown = (event: paper.MouseEvent) => {
-      // If the mouse is over a board, make a slice
-      const hitBoard = this.hitTestPaperBoard(event.point);
-      if (!hitBoard) return;
-
-      const ptq = pointTileQuadrant(hitBoard, event.point);
-      if (!ptq) return;
-
-      const slice = tileQuadrantToSlice(ptq.tile, ptq.quadrant);
-      this.sliceCallback(slice, hitBoard.uuid);
-    };
-
-    const switchToSlice = (event: paper.KeyEvent) => {
-      if (event.key === "shift") {
-        // If shift is released, stop dragging
-        this.selectedBoardUUID = null;
-        this.sliceTool.activate();
-      }
-    };
-    const switchToDrag = (event: paper.KeyEvent) => {
-      if (event.key === "shift") {
-        // If shift is pressed, start dragging
-        this.sliceIndicator = null;
-        this.dragTool.activate();
-      }
-    };
-    this.dragTool.onKeyUp = switchToSlice;
-    this.dragTool.onKeyDown = switchToDrag;
-    this.sliceTool.onKeyUp = switchToSlice;
-    this.sliceTool.onKeyDown = switchToDrag;
   }
 
   public renderSliceIndicator(
@@ -479,6 +413,30 @@ export class VisualState extends BaseState {
     line.strokeColor = color;
     line.strokeWidth = strokeWidth;
     return line;
+  }
+  /**
+   * Randomly position boards within the canvas. They may overlap. Centered around origin.
+   */
+  shuffleBoards(canvasSize: paper.Size): void {
+    const edgePadding = 50; // Padding from the edge of the canvas
+    const boards = Object.values(this.paperBoards);
+    for (const board of boards) {
+      const boardWidth = board.dimensions.width * PaperBoard.baseTileSize.width;
+      const boardHeight =
+        board.dimensions.height * PaperBoard.baseTileSize.height;
+      const x =
+        Math.random() * (canvasSize.width - 2 * edgePadding - boardWidth) +
+        edgePadding +
+        boardWidth / 2;
+      const y =
+        Math.random() * (canvasSize.height - 2 * edgePadding - boardHeight) +
+        edgePadding +
+        boardHeight / 2;
+      board.position = new paper.Point(
+        x - canvasSize.width / 2,
+        y - canvasSize.height / 2
+      );
+    }
   }
 
   /**
@@ -690,10 +648,27 @@ export class VisualState extends BaseState {
         this.paperBoards[board.uuid].position.x,
         this.paperBoards[board.uuid].position.y
       );
-      const velocity = force.multiply(frameTime / 1000); // Scale by frame time
+      const velocity = force
+        .multiply(frameTime / 1000)
+        .multiply(VisualState.timeScale);
       const newPos = pos.add(velocity);
 
       this.paperBoards[board.uuid].position = newPos;
     }
+  }
+}
+
+/**
+ * A player that gets its actions from user interaction with a Paper.js canvas.
+ * When asked for an action, this player will wait for the user to click on a
+ * board and select a slice.
+ */
+export class VisualPlayer extends Player<VisualState> {
+  constructor(
+    name: string,
+    turnRemainder: number,
+    getActionCallback: (state: VisualState) => Promise<Action>
+  ) {
+    super(name, turnRemainder, getActionCallback);
   }
 }

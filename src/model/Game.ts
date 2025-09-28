@@ -22,7 +22,38 @@ export interface TileCoordinate {
   y: number;
 }
 
-export interface Player {}
+export interface PlayerInfo {
+  uuid: string;
+  name: string;
+  turnRemainder: number; // The player's turn is when (turn number % player count) == turn modulo
+}
+
+export class Player<TState extends BaseState> {
+  info: PlayerInfo;
+
+  getActionCallback: (state: TState) => Promise<Action>;
+
+  /**
+   * Creates a new Player.
+   * @param info - Basic info about the player, including their name and turn
+   * order.
+   * @param getActionCallback - This function is called when it is this player's
+   * turn to act. It should return a promise that resolves to the action the
+   * player wants to take.
+   */
+  constructor(
+    name: string,
+    turnRemainder: number,
+    getActionCallback: (state: TState) => Promise<Action>
+  ) {
+    this.info = { uuid: generateUUID(), name, turnRemainder };
+    this.getActionCallback = getActionCallback;
+  }
+
+  public async getAction(state: TState): Promise<Action> {
+    return this.getActionCallback(state);
+  }
+}
 
 export interface BoardDimensions {
   width: number;
@@ -58,12 +89,19 @@ export interface Action {
 }
 
 export interface Turn {
-  player: Player;
+  player: PlayerInfo;
   action: Action;
 }
 
 export interface WinCondition<TState extends BaseState> {
   condition: (state: TState) => boolean;
+}
+
+export interface TurnResult {
+  turn: Turn;
+  inState: BaseState;
+  outState: BaseState;
+  sliceResult: SliceResult;
 }
 
 export interface SliceResult {
@@ -74,18 +112,12 @@ export interface SliceResult {
   removedBoards: Board[]; // Will all have either zero marked coordinates, or be a single 1x1 board that is marked
 }
 
-export interface TurnResult {
-  turn: Turn;
-  inState: BaseState;
-  outState: BaseState;
-  sliceResult: SliceResult;
-}
-
 export function sliceBoard(board: Board, slice: Slice): SliceResult | null {
   // Apply a slice on a board.
   // Returns null if the slice is invalid (out of bounds).
   // Does not return any boards that do not have a marked coordinate.
   // Marked coordinates are moved to their new positions on the sliced boards.
+  // Does not modify the original board.
 
   const sliceDir = slice.direction;
   const sliceIndex = slice.line;
@@ -183,26 +215,59 @@ export function sliceBoard(board: Board, slice: Slice): SliceResult | null {
 }
 
 export abstract class BaseState {
-  boards: Record<string, Board>; // Boards indexed by their UUIDs. This is to make it easier to update them, and to ensure that the orders are consistent across states, even when visualized and with boards being removed.
-  currentPlayer: Player;
+  // The base state of a Divinim game. All data about individual instances /
+  // states should be in simple objects / interfaces, not classes, to ensure
+  // serializability. This applies to non-abstract subclasses of BaseState as
+  // well.
+  boards: Record<string, Board>;
+  players: PlayerInfo[];
+  turnHistory: Turn[];
 
-  constructor(players: Player[], boards: Board[]) {
+  constructor(players: PlayerInfo[], boards: Board[]) {
     this.boards = boards.reduce((acc, board) => {
       acc[board.uuid] = board;
       return acc;
     }, {} as Record<string, Board>);
-    this.currentPlayer = players[0];
+    this.players = players;
+    this.turnHistory = [];
   }
 
+  // This method is called after each turn is played, and can be used to
+  // update any state that depends on the turn history or the current boards.
+  // For example, ensuring that boards are positioned consistently after a
+  // slice.
   abstract postTurnUpdate(turnResult: TurnResult): void;
+
+  get availableActions(): Action[] {
+    // For each board, a slice can be made between any two tiles, or
+    // equivalently between any two rows or columns.
+    const actions: Action[] = [];
+    for (const board of Object.values(this.boards)) {
+      for (let x = 1; x < board.dimensions.width; x++) {
+        actions.push({
+          slice: { direction: Direction.Vertical, line: x },
+          board: board,
+        });
+      }
+      for (let y = 1; y < board.dimensions.height; y++) {
+        actions.push({
+          slice: { direction: Direction.Horizontal, line: y },
+          board: board,
+        });
+      }
+    }
+    return actions;
+  }
 }
 
 // Base class for a Divinim game
 export class Game<TState extends BaseState> {
   protected state: TState;
+  protected players: Player<TState>[];
 
-  constructor(initialState: TState) {
+  constructor(initialState: TState, players: Player<TState>[]) {
     this.state = initialState;
+    this.players = players;
   }
 
   public getState(): TState {
@@ -233,22 +298,44 @@ export class Game<TState extends BaseState> {
     ].filter((b) => b !== null) as Board[]) {
       newBoards[board.uuid] = board;
     }
-    const newState = Object.create(this.state.constructor.prototype) as TState;
-    Object.assign(newState, this.state);
-    newState.boards = newBoards;
+
+    const stateCopy = Object.create(this.state.constructor.prototype) as TState;
+    Object.assign(stateCopy, this.state);
+    stateCopy.boards = newBoards;
+
     const turnResult: TurnResult = {
       turn,
       inState: this.state,
-      outState: newState,
+      outState: stateCopy,
       sliceResult,
     };
-    newState.postTurnUpdate(turnResult);
+    stateCopy.postTurnUpdate(turnResult);
 
-    return newState;
+    return stateCopy;
   }
 
   public playTurn(turn: Turn): void {
     this.setState(this.simulateTurn(turn));
+    this.state.turnHistory.push(turn);
+  }
+
+  public async playLoop(): Promise<void> {
+    while (true) {
+      const currentPlayer = this.currentPlayer();
+      if (!currentPlayer) throw new Error("No current player found");
+
+      const action = await this.requestPlayerAction(currentPlayer);
+      if (this.isValidAction(action)) {
+        this.playTurn({
+          player: currentPlayer.info,
+          action: action,
+        });
+      }
+    }
+  }
+
+  public async requestPlayerAction(player: Player<TState>): Promise<Action> {
+    return player.getAction(this.state);
   }
 
   public getAvailableActions(): Action[] {
@@ -269,5 +356,95 @@ export class Game<TState extends BaseState> {
       }
     }
     return actions;
+  }
+
+  /**
+   * Checks if the given action is valid.
+   * @param action The action to check.
+   * @returns True if the action is valid, false otherwise.
+   */
+  public isValidAction(action: Action): boolean {
+    console.log("Validating action:", action);
+    if (!this.state.boards[action.board.uuid]) {
+      return false;
+    }
+    if (action.slice.direction === Direction.Horizontal) {
+      if (
+        action.slice.line < 1 ||
+        action.slice.line >=
+          this.state.boards[action.board.uuid].dimensions.height
+      ) {
+        return false;
+      }
+    } else if (action.slice.direction === Direction.Vertical) {
+      if (
+        action.slice.line < 1 ||
+        action.slice.line >=
+          this.state.boards[action.board.uuid].dimensions.width
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  public currentTurnNumber(): number {
+    return this.state.turnHistory.length;
+  }
+
+  public currentPlayer(): Player<TState> | null {
+    const turnNumber = this.currentTurnNumber();
+    for (const player of this.players) {
+      if (turnNumber % this.players.length === player.info.turnRemainder) {
+        return player;
+      }
+    }
+    return null;
+  }
+
+  public isPlayerTurn(player: PlayerInfo): boolean {
+    const playerRemainder = player.turnRemainder;
+    const turnNumber = this.currentTurnNumber();
+    const playerCount = this.players.length;
+    return turnNumber % playerCount === playerRemainder;
+  }
+
+  /**
+   * Checks if the given turn is valid. A turn is valid if it is the player's
+   * turn and the action is valid.
+   * @param turn The turn to check.
+   * @returns True if the turn is valid, false otherwise.
+   */
+  public isValidTurn(turn: Turn): boolean {
+    if (!this.isPlayerTurn(turn.player)) {
+      return false;
+    }
+    if (!this.isValidAction(turn.action)) {
+      return false;
+    }
+    return true;
+  }
+}
+
+export class RandomPlayer extends Player<BaseState> {
+  // A player that selects a random valid action after a delay
+
+  private delayMs: number;
+
+  constructor(turnRemainder: number, delayMs = 1000) {
+    super("Random Player", turnRemainder, (state: BaseState) => {
+      const actions = state.availableActions;
+      if (actions.length === 0) {
+        return Promise.reject("No available actions");
+      }
+      const randomAction = actions[Math.floor(Math.random() * actions.length)];
+
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          resolve(randomAction);
+        }, this.delayMs);
+      });
+    });
+    this.delayMs = delayMs;
   }
 }

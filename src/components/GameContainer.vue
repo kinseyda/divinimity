@@ -11,11 +11,11 @@ import PaperCanvasFull from "./PaperCanvasFull.vue";
 
 import paper from "paper";
 import {
+  actionToString,
   Game,
   RandomPlayer,
   type Action,
   type Board,
-  type PlayerInfo,
   type Slice,
 } from "../model/Game";
 import { getDaisyUIColor } from "../utils/StyleUtils";
@@ -77,13 +77,38 @@ export default {
       game: null as Game<VisualState> | null,
       sliceTool: null as paper.Tool | null,
       dragTool: null as paper.Tool | null,
+      visualPlayer: null as VisualPlayer | null,
     };
   },
   props: {},
+  mounted() {
+    this.newGame();
+  },
   methods: {
+    actionToString(action: Action): string {
+      return actionToString(action);
+    },
+    winnerString(): string {
+      if (!this.game) return "";
+      const winnerInfos = this.game.winners;
+      if (winnerInfos.length === 0) return "";
+      if (winnerInfos.length === 1) {
+        if (winnerInfos[0] === this.visualPlayer?.info) {
+          return `You win!`;
+        }
+        return `Winner: ${winnerInfos[0].name}`;
+      }
+      return `Winners: ${winnerInfos.map((p) => p.name).join(", ")}`;
+    },
+    isWinnerVisualPlayer(): boolean {
+      if (!this.game) return false;
+      const winnerInfos = this.game.winners;
+      if (winnerInfos.length === 0) return false;
+      return winnerInfos.includes(this.visualPlayer?.info!);
+    },
     newGame() {
       const boards = [] as Board[];
-      for (let i = 0; i < 1; i++) {
+      for (let i = 0; i < Math.floor(Math.random() * 3 + 1); i++) {
         boards.push(randomBoard());
       }
       // We'll use a Promise and its resolver to "pipe" between getActionCallback
@@ -111,11 +136,16 @@ export default {
         });
       };
 
-      const visualPlayer = new VisualPlayer("p1", 0, getActionCallback);
+      const visualPlayer = new VisualPlayer("User", 0, getActionCallback);
+      this.visualPlayer = visualPlayer;
       const randomPlayer = new RandomPlayer(1);
 
       const testGame = new Game<VisualState>(
-        new VisualState([], boards, actionCallback),
+        new VisualState(
+          [visualPlayer.info, randomPlayer.info],
+          boards,
+          actionCallback
+        ),
         [visualPlayer, randomPlayer]
       );
 
@@ -179,22 +209,10 @@ export default {
         if (!ptq) return;
 
         const slice = tileQuadrantToSlice(ptq.tile, ptq.quadrant);
-        console.log(
-          `Slice made: ${JSON.stringify(slice)} on board ${hitBoard.uuid}`
-        );
+
         const board = this.game!.getState().boards[hitBoard.uuid];
-        console.log("Board data:", board);
         if (!board) {
-          console.warn("Board not found in game state:", hitBoard.uuid);
-          console.log(
-            "Current game state boards:",
-            this.game!.getState().boards
-          );
-          console.log(
-            "Current game state paperBoards:",
-            this.game!.getState().paperBoards
-          );
-          return;
+          throw new Error("Board not found in state");
         }
         this.game!.getState().actionCallBack(slice, board);
       };
@@ -241,7 +259,8 @@ export default {
       const successColor = new paper.Color(getDaisyUIColor("--color-success"));
       const errorColor = new paper.Color(getDaisyUIColor("--color-error"));
       const infoColor = new paper.Color(getDaisyUIColor("--color-info"));
-      const baseColor = new paper.Color(getDaisyUIColor("--color-base-300"));
+      const base200Color = new paper.Color(getDaisyUIColor("--color-base-200"));
+      const base300Color = new paper.Color(getDaisyUIColor("--color-base-300"));
       const baseContentColor = new paper.Color(
         getDaisyUIColor("--color-base-content")
       );
@@ -249,65 +268,102 @@ export default {
 
       const paperBoards = Object.values(this.game!.getState().paperBoards);
 
-      if (
-        paperBoards.every(
-          (board) => board.position.x === -1 && board.position.y === -1
-        )
-      ) {
-        // Initial placement around center if all positions are uninitialized
-        const center = view.center;
-        const initialPositions = placeAroundCenter(
-          paperBoards,
-          new paper.Point(0, 0)
-        );
-        paperBoards.forEach((board, index) => {
-          board.position = initialPositions[index];
-        });
-
-        this.sliceTool!.activate();
-      } else {
-        // Update positions based on forces
-        // Center point attraction
-        const centerPoint = new paper.Point(0, 0);
-        // Center line attraction
-        //   const centerPoint = centerLine(view);
-
-        this.game!.getState().updatePositions(event.delta, centerPoint);
-      }
-
       const groups = [] as paper.Group[];
       const overlayGroup = new paper.Group();
-      for (const board of paperBoards) {
-        const boardGroup = board.renderToGroup(
-          primaryColor,
-          baseColor,
-          baseContentColor
-        );
-        groups.push(boardGroup);
+      const underlayGroup = new paper.Group();
+      let zoomToFit = false;
+      let axisLine = false;
 
-        // Add the slice marker if active
-        if (this.game!.getState().sliceIndicator) {
-          const { boardUUID, direction, index } =
-            this.game!.getState().sliceIndicator!;
-          const board = this.game!.getState().paperBoards[boardUUID];
-          if (board) {
-            const sliceMarker = this.game!.getState().renderSliceIndicator(
-              boardUUID,
-              direction,
-              index,
-              secondaryColor,
-              10
-            );
-            if (sliceMarker) {
-              overlayGroup.addChild(sliceMarker);
+      if (paperBoards.length === 0) {
+        // The game is over, display the winner(s)
+        const winnerText = this.winnerString();
+        const textItem = new paper.PointText({
+          point: new paper.Point(0, 0),
+          content: winnerText,
+          fillColor: this.isWinnerVisualPlayer() ? successColor : primaryColor,
+          fontFamily: "Arial",
+          fontWeight: "bold",
+          fontSize: 100,
+        });
+        textItem.bringToFront();
+        groups.push(new paper.Group([textItem]));
+        zoomToFit = true;
+        axisLine = false;
+      } else {
+        if (
+          paperBoards.every(
+            (board) => board.position.x === -1 && board.position.y === -1
+          )
+        ) {
+          // Initial placement around center if all positions are uninitialized
+          const center = view.center;
+          const initialPositions = placeAroundCenter(
+            paperBoards,
+            new paper.Point(0, 0)
+          );
+          paperBoards.forEach((board, index) => {
+            board.position = initialPositions[index];
+          });
+
+          this.sliceTool!.activate();
+        } else {
+          // Update positions based on forces
+          // Center point attraction
+          const centerPoint = new paper.Point(0, 0);
+          // Center line attraction
+          //   const centerPoint = centerLine(view);
+
+          this.game!.getState().updatePositions(event.delta, centerPoint);
+        }
+
+        for (const board of paperBoards) {
+          const boardGroup = board.renderToGroup(
+            primaryColor,
+            base200Color,
+            base300Color,
+            baseContentColor
+          );
+          groups.push(boardGroup);
+
+          // Add the slice marker if active
+          if (this.game!.getState().sliceIndicator) {
+            const { boardUUID, direction, index } =
+              this.game!.getState().sliceIndicator!;
+            const board = this.game!.getState().paperBoards[boardUUID];
+            if (board) {
+              const sliceMarker = this.game!.getState().renderSliceIndicator(
+                boardUUID,
+                direction,
+                index,
+                secondaryColor,
+                16
+              );
+              if (sliceMarker) {
+                overlayGroup.addChild(sliceMarker);
+              }
             }
+          }
+        }
+
+        zoomToFit = !this.game!.getState().selectedBoardUUID;
+
+        if (this.game!.getState().selectedBoardUUID) {
+          // Ensure the dragged board is fully visible
+          const selectedBoard =
+            this.game!.getState().paperBoards[
+              this.game!.getState().selectedBoardUUID!
+            ];
+          if (selectedBoard) {
+            groups
+              .find(
+                (g) => (g.data as BoardData).boardUUID === selectedBoard.uuid
+              )
+              ?.bringToFront();
           }
         }
       }
 
-      if (!this.game!.getState().selectedBoardUUID) {
-        // If no board is being dragged, fit all boards in view
-
+      if (zoomToFit) {
         // Disable the overlay groups, they cause issues with bounds calculation
         overlayGroup.visible = false;
 
@@ -325,39 +381,27 @@ export default {
         // Re-enable overlay group
         overlayGroup.visible = true;
       } else {
-        // If a board is being dragged, don't adjust the view
+        // Use the stored zoom level
         project.view.zoom = this.game!.getState().zoomLevel;
       }
-
-      if (this.game!.getState().selectedBoardUUID) {
-        // Ensure the dragged board is fully visible
-        const selectedBoard =
-          this.game!.getState().paperBoards[
-            this.game!.getState().selectedBoardUUID!
-          ];
-        if (selectedBoard) {
-          groups
-            .find((g) => (g.data as BoardData).boardUUID === selectedBoard.uuid)
-            ?.bringToFront();
-        }
+      if (axisLine) {
+        // Simple axis underlay
+        underlayGroup.addChild(
+          new paper.Path.Line(
+            new paper.Point(-10000, 0),
+            new paper.Point(10000, 0)
+          )
+        );
+        underlayGroup.addChild(
+          new paper.Path.Line(
+            new paper.Point(0, -10000),
+            new paper.Point(0, 10000)
+          )
+        );
+        underlayGroup.strokeColor = base300Color;
+        underlayGroup.strokeWidth = 5;
       }
 
-      const underlayGroup = new paper.Group();
-      // Simple axis underlay
-      underlayGroup.addChild(
-        new paper.Path.Line(
-          new paper.Point(-10000, 0),
-          new paper.Point(10000, 0)
-        )
-      );
-      underlayGroup.addChild(
-        new paper.Path.Line(
-          new paper.Point(0, -10000),
-          new paper.Point(0, 10000)
-        )
-      );
-      underlayGroup.strokeColor = baseColor;
-      underlayGroup.strokeWidth = 5;
       underlayGroup.sendToBack();
       overlayGroup.bringToFront();
     },
@@ -371,6 +415,45 @@ export default {
       Shuffle boards
     </button>
   </div>
+
+  <div class="fixed m-10 flex gap-4 right-0 bottom-0 flex-col items-end">
+    <span class="btn btn-lg btn-ghost">Hold Shift to drag boards</span>
+    <span class="btn btn-lg btn-ghost"
+      >Click on grid lines to slice boards</span
+    >
+  </div>
+  <div class="fixed m-10 flex gap-4 right-0 flex-col items-end">
+    <details class="collapse collapse-arrow bg-base-100 border-base-300 border">
+      <summary class="collapse-title font-semibold">
+        <span v-if="!game?.winners.length"
+          >{{ game?.currentPlayer()?.info.name }}'s Turn</span
+        >
+        <span v-else>Game Over</span>
+      </summary>
+      <div class="collapse-content max-h-96 overflow-y-auto">
+        <table class="table table-xs w-3xs bg-base-200">
+          <thead>
+            <tr>
+              <th>Turn</th>
+              <th>Player</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="(entry, index) in game?.getState().turnHistory"
+              :key="index"
+            >
+              <td>{{ index + 1 }}</td>
+              <td>{{ entry.player.name }}</td>
+              <td>{{ actionToString(entry.action) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </details>
+  </div>
+
   <PaperCanvasFull :redrawFunction="redrawFunc" />
 </template>
 <style scoped>

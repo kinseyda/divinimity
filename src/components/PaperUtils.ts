@@ -2,6 +2,7 @@ import {
   BaseState,
   Direction,
   newBoard,
+  NoMovesWinCondition,
   Player,
   type Action,
   type Board,
@@ -103,6 +104,14 @@ function minimumTranslationVector(
   }
 }
 
+/**
+ * Generates a random board configuration.
+ * @param minDimension Minimum width/height of the board
+ * @param maxDimension Maximum width/height of the board
+ * @param minMarks Minimum number of marked tiles
+ * @param maxMarks Maximum number of marked tiles
+ * @returns A randomly generated board
+ */
 export function randomBoard(
   minDimension = 2,
   maxDimension = 10,
@@ -168,7 +177,8 @@ export class PaperBoard {
   public renderToGroup(
     colorMarked: paper.Color,
     colorUnmarked: paper.Color,
-    colorGrid: paper.Color
+    colorGrid: paper.Color,
+    colorOutline: paper.Color
   ): paper.Group {
     const group = new paper.Group();
     group.data = { boardUUID: this.uuid } as BoardData;
@@ -195,7 +205,7 @@ export class PaperBoard {
         new paper.Point(boardRect.right, y)
       );
       line.strokeColor = colorGrid;
-      line.strokeWidth = 1;
+      line.strokeWidth = 8;
       group.addChild(line);
     }
 
@@ -206,7 +216,7 @@ export class PaperBoard {
         new paper.Point(x, boardRect.bottom)
       );
       line.strokeColor = colorGrid;
-      line.strokeWidth = 1;
+      line.strokeWidth = 8;
       group.addChild(line);
     }
 
@@ -227,15 +237,15 @@ export class PaperBoard {
       const tilePath = new paper.Path.Rectangle(tileRect);
       tilePath.fillColor = colorMarked;
       tilePath.strokeColor = colorGrid;
-      tilePath.strokeWidth = 1;
+      tilePath.strokeWidth = 8;
 
       group.addChild(tilePath);
     }
 
     // Mask to round corners
     const mask = new paper.Path.Rectangle(boardRect, new paper.Size(25, 25));
-    mask.strokeColor = colorGrid;
-    mask.strokeWidth = 4;
+    mask.strokeColor = colorOutline;
+    mask.strokeWidth = 16;
     group.addChild(mask); // Used for showing the border on top of everything
     group.insertChild(0, mask.clone()); // Used for the clipping mask
     group.clipped = true;
@@ -243,6 +253,12 @@ export class PaperBoard {
   }
 }
 
+/**
+ * Converts a tile coordinate and quadrant into a slice representation.
+ * @param tile The tile coordinate
+ * @param quadrant The quadrant within the tile
+ * @returns The corresponding slice representation
+ */
 export function tileQuadrantToSlice(
   tile: TileCoordinate,
   quadrant: Quadrant
@@ -271,8 +287,8 @@ export enum Quadrant {
 }
 /**
  * Given a point and a board, determine which quadrant of which tile the point
- * is in. Divides the board into an equal grid of tiles, ignoring any visual
- * clutter that might be on top of it.
+ * is in. Divides the board into an equal grid of tiles based on bounds,
+ * ignoring any visual clutter that might be on top of it.
  * @param board
  * @param point
  * @returns The tile coordinate and quadrant, or null if the point is outside
@@ -360,7 +376,7 @@ export class VisualState extends BaseState {
     boards: Board[],
     actionCallback: (slice: Slice, board: Board) => void
   ) {
-    super(players, boards);
+    super(players, boards, [NoMovesWinCondition]);
     this.actionCallBack = actionCallback;
     // Board positions are initialized at -1,-1 for all boards here since we
     // don't know the canvas dimensions. They will be updated later to be
@@ -382,7 +398,7 @@ export class VisualState extends BaseState {
     color: paper.Color,
     strokeWidth: number,
     overDrawPadding = 20
-  ): paper.Path | null {
+  ): paper.Group | null {
     const board = this.paperBoards[boardUUID];
     if (!board) return null;
     const rows = board.dimensions.height;
@@ -394,26 +410,60 @@ export class VisualState extends BaseState {
       new paper.Size(boardWidth, boardHeight)
     );
 
-    let line: paper.Path;
+    let group = new paper.Group();
     if (direction === Direction.Horizontal) {
       if (index < 0 || index > rows) return null; // Out of bounds
       const y = boardRect.top + index * PaperBoard.baseTileSize.height;
-      line = new paper.Path.Line(
+      const line = new paper.Path.Line(
         new paper.Point(boardRect.left - overDrawPadding, y),
         new paper.Point(boardRect.right + overDrawPadding, y)
       );
+      line.strokeColor = color;
+      line.strokeWidth = strokeWidth;
+      // Add circles to the ends to make the line rounded
+      const startCircle = new paper.Path.Circle(
+        new paper.Point(boardRect.left - overDrawPadding, y),
+        strokeWidth / 2
+      );
+      const endCircle = new paper.Path.Circle(
+        new paper.Point(boardRect.right + overDrawPadding, y),
+        strokeWidth / 2
+      );
+      startCircle.fillColor = color;
+      endCircle.fillColor = color;
+
+      group.addChild(line);
+      group.addChild(startCircle);
+      group.addChild(endCircle);
     } else {
       if (index < 0 || index > cols) return null; // Out of bounds
+
       const x = boardRect.left + index * PaperBoard.baseTileSize.width;
-      line = new paper.Path.Line(
+      const line = new paper.Path.Line(
         new paper.Point(x, boardRect.top - overDrawPadding),
         new paper.Point(x, boardRect.bottom + overDrawPadding)
       );
+      line.strokeColor = color;
+      line.strokeWidth = strokeWidth;
+      // Add circles to the ends to make the line rounded
+      const startCircle = new paper.Path.Circle(
+        new paper.Point(x, boardRect.top - overDrawPadding),
+        strokeWidth / 2
+      );
+      const endCircle = new paper.Path.Circle(
+        new paper.Point(x, boardRect.bottom + overDrawPadding),
+        strokeWidth / 2
+      );
+      startCircle.fillColor = color;
+      endCircle.fillColor = color;
+
+      group.addChild(line);
+      group.addChild(startCircle);
+      group.addChild(endCircle);
     }
-    line.strokeColor = color;
-    line.strokeWidth = strokeWidth;
-    return line;
+    return group;
   }
+
   /**
    * Randomly position boards within the canvas. They may overlap. Centered around origin.
    */
@@ -463,11 +513,9 @@ export class VisualState extends BaseState {
     // First determine which paper board to replace
     const oldBoard = this.paperBoards[turnResult.turn.action.board.uuid];
     if (!oldBoard) {
-      console.warn(
-        "Old board not found in visual state:",
-        turnResult.turn.action.board.uuid
+      throw new Error(
+        "Old board not found in visual state during postTurnUpdate"
       );
-      return;
     }
     const oldPosition = oldBoard.position;
     const oldTopLeft = oldBoard.bounds.topLeft;
@@ -482,7 +530,8 @@ export class VisualState extends BaseState {
     // board's center, and the other to the right.
     const newBoards = turnResult.sliceResult.boards;
     if (newBoards.reducedBoard === null && newBoards.childBoard === null) {
-      console.warn("No new boards created from slice:", turnResult);
+      // No new boards were created, nothing to do
+      // This can happen if the old board was 2x1 and both tiles were marked
       return;
     }
     const oldBoardWidth = oldBoard.dimensions.width;

@@ -15,6 +15,10 @@ export interface Slice {
   line: number;
 }
 
+export function tileCoordinateToString(coord: TileCoordinate): string {
+  return `(${coord.x}, ${coord.y})`;
+}
+
 export interface TileCoordinate {
   // Coordinates start from the top-left corner (0, 0), like pixels, not like
   // regular cartesian coordinates.
@@ -68,6 +72,16 @@ export interface Board {
   uuid: string;
 }
 
+export function boardToString(board: Board): string {
+  return `${board.dimensions.width}x${
+    board.dimensions.height
+  }, ${board.markedCoordinates.map(tileCoordinateToString).join(", ")}`;
+}
+
+export function humanReadableUUID(uuid: string): string {
+  return uuid.split("-")[0] + "...";
+}
+
 function generateUUID(): string {
   return crypto.randomUUID();
 }
@@ -83,6 +97,14 @@ export function newBoard(
   };
 }
 
+export function actionToString(action: Action): string {
+  if (action.slice.direction === Direction.Horizontal) {
+    return `H${action.slice.line}-${humanReadableUUID(action.board.uuid)}`;
+  } else {
+    return `V${action.slice.line}-${humanReadableUUID(action.board.uuid)}`;
+  }
+}
+
 export interface Action {
   slice: Slice;
   board: Board;
@@ -94,8 +116,19 @@ export interface Turn {
 }
 
 export interface WinCondition<TState extends BaseState> {
-  condition: (state: TState) => boolean;
+  condition: (state: TState) => PlayerInfo[] | null; // Returns the info of the winning player, or null if no winner yet
 }
+
+export const NoMovesWinCondition: WinCondition<BaseState> = {
+  condition: (state: BaseState): PlayerInfo[] | null => {
+    // If a player has no valid moves, they lose.
+    const availableActions = state.availableActions;
+    if (availableActions.length === 0) {
+      return [state.previousPlayer];
+    }
+    return null;
+  },
+};
 
 export interface TurnResult {
   turn: Turn;
@@ -219,16 +252,24 @@ export abstract class BaseState {
   // states should be in simple objects / interfaces, not classes, to ensure
   // serializability. This applies to non-abstract subclasses of BaseState as
   // well.
-  boards: Record<string, Board>;
-  players: PlayerInfo[];
-  turnHistory: Turn[];
 
-  constructor(players: PlayerInfo[], boards: Board[]) {
+  boards: Record<string, Board>; // Keyed by UUID
+  players: PlayerInfo[]; // Players should be sorted by their turnRemainder, should equal index
+  turnHistory: Turn[];
+  winConditions: WinCondition<BaseState>[];
+
+  constructor(
+    players: PlayerInfo[],
+    boards: Board[],
+    winConditions: WinCondition<BaseState>[]
+  ) {
     this.boards = boards.reduce((acc, board) => {
       acc[board.uuid] = board;
       return acc;
     }, {} as Record<string, Board>);
     this.players = players;
+    this.players.sort((a, b) => a.turnRemainder - b.turnRemainder);
+    this.winConditions = winConditions;
     this.turnHistory = [];
   }
 
@@ -258,16 +299,32 @@ export abstract class BaseState {
     }
     return actions;
   }
+
+  get currentTurnNumber(): number {
+    return this.turnHistory.length;
+  }
+
+  get currentPlayer(): PlayerInfo {
+    return this.players[this.currentTurnNumber % this.players.length];
+  }
+
+  get previousPlayer(): PlayerInfo {
+    return this.players[
+      (this.currentTurnNumber - 1 + this.players.length) % this.players.length
+    ];
+  }
 }
 
 // Base class for a Divinim game
 export class Game<TState extends BaseState> {
   protected state: TState;
   protected players: Player<TState>[];
+  // Players should be sorted by their turnRemainder
 
   constructor(initialState: TState, players: Player<TState>[]) {
     this.state = initialState;
     this.players = players;
+    this.players.sort((a, b) => a.info.turnRemainder - b.info.turnRemainder);
   }
 
   public getState(): TState {
@@ -276,6 +333,19 @@ export class Game<TState extends BaseState> {
 
   public setState(newState: TState): void {
     this.state = newState;
+  }
+
+  public get winners(): PlayerInfo[] {
+    // Returns the info of the winning players, or an empty array if no winner
+    // yet
+    const winners: PlayerInfo[] = [];
+    for (const winCondition of this.state.winConditions) {
+      const result = winCondition.condition(this.state);
+      if (result) {
+        winners.push(...result);
+      }
+    }
+    return winners;
   }
 
   public simulateTurn(turn: Turn): TState {
@@ -331,6 +401,10 @@ export class Game<TState extends BaseState> {
           action: action,
         });
       }
+
+      if (this.winners.length > 0) {
+        break;
+      }
     }
   }
 
@@ -364,7 +438,6 @@ export class Game<TState extends BaseState> {
    * @returns True if the action is valid, false otherwise.
    */
   public isValidAction(action: Action): boolean {
-    console.log("Validating action:", action);
     if (!this.state.boards[action.board.uuid]) {
       return false;
     }
@@ -389,17 +462,12 @@ export class Game<TState extends BaseState> {
   }
 
   public currentTurnNumber(): number {
-    return this.state.turnHistory.length;
+    return this.state.currentTurnNumber;
   }
 
   public currentPlayer(): Player<TState> | null {
-    const turnNumber = this.currentTurnNumber();
-    for (const player of this.players) {
-      if (turnNumber % this.players.length === player.info.turnRemainder) {
-        return player;
-      }
-    }
-    return null;
+    const pInfo = this.state.currentPlayer;
+    return this.players[pInfo.turnRemainder] || null;
   }
 
   public isPlayerTurn(player: PlayerInfo): boolean {
@@ -432,7 +500,7 @@ export class RandomPlayer extends Player<BaseState> {
   private delayMs: number;
 
   constructor(turnRemainder: number, delayMs = 1000) {
-    super("Random Player", turnRemainder, (state: BaseState) => {
+    super("Random CPU", turnRemainder, (state: BaseState) => {
       const actions = state.availableActions;
       if (actions.length === 0) {
         return Promise.reject("No available actions");

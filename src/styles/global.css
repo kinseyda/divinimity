@@ -1,4 +1,4 @@
 @import "tailwindcss";
 @plugin "daisyui" {
-  themes: cmyk --preferslight, coffee --prefersdark;
+  themes: fantasy --preferslight, coffee --prefersdark;
 }

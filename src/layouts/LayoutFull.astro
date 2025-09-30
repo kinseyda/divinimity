@@ -7,8 +7,8 @@ import LayoutBase from "./LayoutBase.astro";
 <LayoutBase>
   <div class="w-screen h-screen absolute flex flex-col">
     <Navbar />
-    <div class="flex-grow overflow-auto">
-      <slot />
+    <div class="flex-grow relative">
+      <slot name="content" />
     </div>
   </div>
 </LayoutBase>

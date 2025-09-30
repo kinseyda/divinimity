@@ -499,8 +499,12 @@ export class RandomPlayer extends Player<BaseState> {
 
   private delayMs: number;
 
-  constructor(turnRemainder: number, delayMs = 1000) {
-    super("Random CPU", turnRemainder, (state: BaseState) => {
+  constructor(
+    turnRemainder: number,
+    name: string = "Random CPU",
+    delayMs = 1000
+  ) {
+    super(name, turnRemainder, (state: BaseState) => {
       const actions = state.availableActions;
       if (actions.length === 0) {
         return Promise.reject("No available actions");

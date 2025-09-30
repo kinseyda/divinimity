@@ -5,8 +5,15 @@ import LayoutBase from "./LayoutBase.astro";
 ---
 
 <LayoutBase>
-  <Navbar />
-  <div class="filter backdrop-blur-md max-w-3xl lg:m-5 rounded-4xl grow">
-    <slot />
+  <div class="w-screen h-screen absolute flex flex-col">
+    <Navbar />
+    <div class="flex-grow relative flex flex-col">
+      <div class="flex-grow flex flex-col items-center justify-center">
+        <slot name="content" />
+      </div>
+      <div class="absolute -z-10 opacity-70 w-full h-full blur-xs">
+        <slot name="background" class="" />
+      </div>
+    </div>
   </div>
 </LayoutBase>

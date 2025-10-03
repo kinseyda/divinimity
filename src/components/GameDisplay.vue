@@ -17,8 +17,7 @@ import {
   type Action,
   type Board,
   type Slice,
-} from "../model/Game";
-import { getDaisyUIColors } from "../utils/StyleUtils";
+} from "../model/BaseModel";
 import {
   pointTileQuadrant,
   randomBoard,
@@ -28,7 +27,8 @@ import {
   type BoardData,
   type PaperBoard,
   type RedrawEvent,
-} from "./PaperUtils";
+} from "../model/VisualModel";
+import { getDaisyUIColors } from "../utils/StyleUtils";
 
 function centerLine(view: paper.View): paper.Path.Line {
   const width = view.size.width;
@@ -55,7 +55,7 @@ function placeAroundCenter(
 ): paper.Point[] {
   const positions: paper.Point[] = [];
   const angleStep = (2 * Math.PI) / boards.length;
-  const radius = 500;
+  const radius = 1;
   // offset randomly to avoid exact horizontal/vertical alignment, makes for faster stabilization
   const offset = Math.random() * Math.PI * 2;
   for (let i = 0; i < boards.length; i++) {
@@ -74,52 +74,54 @@ export default {
   },
   data() {
     return {
-      game: null as Game<VisualState> | null,
       sliceTool: null as paper.Tool | null,
       dragTool: null as paper.Tool | null,
       visualPlayer: null as VisualPlayer | null,
     };
   },
   props: {
+    game: {
+      type: Object as () => Game<VisualState>,
+      required: true,
+    },
     interactive: {
       type: Boolean,
       default: false,
     },
   },
   mounted() {
-    this.newGame();
     if (!this.interactive) {
       const emptyTool = new paper.Tool();
       emptyTool.activate();
       this.sliceTool = emptyTool;
       this.dragTool = emptyTool;
+    } else {
+      this.setUpInteractiveTools();
     }
   },
   methods: {
     setUpInteractiveTools() {
       if (this.interactive) {
         const startBoardDrag = (event: paper.MouseEvent) => {
-          const hitBoard = this.game!.getState().hitTestPaperBoard(event.point);
+          const hitBoard = this.game.state.hitTestPaperBoard(event.point);
           if (!hitBoard) return;
           // Set the selected board UUID in the game state
-          this.game!.getState().selectedBoardUUID = hitBoard.uuid;
+          this.game.state.selectedBoardUUID = hitBoard.uuid;
 
           // Move the board to the mouse position
           hitBoard.position = event.point;
         };
         const dragBoard = (event: paper.MouseEvent) => {
-          if (!this.game!.getState().selectedBoardUUID) return;
+          if (!this.game.state.selectedBoardUUID) return;
           const board =
-            this.game!.getState().paperBoards[
-              this.game!.getState().selectedBoardUUID!
-            ];
+            this.game.state.paperBoards[this.game.state.selectedBoardUUID!];
           if (!board) return;
 
           // Move the board to the mouse position
           board.position = event.point;
         };
         const endBoardDrag = (event: paper.MouseEvent) => {
-          this.game!.getState().selectedBoardUUID = null;
+          this.game.state.selectedBoardUUID = null;
         };
 
         const dragTool = new paper.Tool();
@@ -130,26 +132,26 @@ export default {
         const sliceTool = new paper.Tool();
         sliceTool.onMouseMove = (event: paper.MouseEvent) => {
           // If the mouse is over a board, indicate where a slice will be made if you click
-          const hitBoard = this.game!.getState().hitTestPaperBoard(event.point);
+          const hitBoard = this.game.state.hitTestPaperBoard(event.point);
           if (hitBoard) {
             const ptq = pointTileQuadrant(hitBoard, event.point);
             if (ptq) {
               const slice = tileQuadrantToSlice(ptq.tile, ptq.quadrant);
-              this.game!.getState().sliceIndicator = {
+              this.game.state.sliceIndicator = {
                 boardUUID: hitBoard.uuid,
                 direction: slice.direction,
                 index: slice.line,
               };
             } else {
-              this.game!.getState().sliceIndicator = null;
+              this.game.state.sliceIndicator = null;
             }
           } else {
-            this.game!.getState().sliceIndicator = null;
+            this.game.state.sliceIndicator = null;
           }
         };
         sliceTool.onMouseDown = (event: paper.MouseEvent) => {
           // If the mouse is over a board, make a slice
-          const hitBoard = this.game!.getState().hitTestPaperBoard(
+          const hitBoard = this.game.state.hitTestPaperBoard(
             event.point
           ) as PaperBoard;
           if (!hitBoard) return;
@@ -159,24 +161,24 @@ export default {
 
           const slice = tileQuadrantToSlice(ptq.tile, ptq.quadrant);
 
-          const board = this.game!.getState().boards[hitBoard.uuid];
+          const board = this.game.state.boards[hitBoard.uuid];
           if (!board) {
             throw new Error("Board not found in state");
           }
-          this.game!.getState().actionCallBack(slice, board);
+          this.game.state.actionCallBack(slice, board);
         };
 
         const switchToSlice = (event: paper.KeyEvent) => {
           if (event.key === "shift") {
             // If shift is released, stop dragging
-            this.game!.getState().selectedBoardUUID = null;
+            this.game.state.selectedBoardUUID = null;
             sliceTool.activate();
           }
         };
         const switchToDrag = (event: paper.KeyEvent) => {
           if (event.key === "shift") {
             // If shift is pressed, start dragging
-            this.game!.getState().sliceIndicator = null;
+            this.game.state.sliceIndicator = null;
             dragTool.activate();
           }
         };
@@ -215,81 +217,9 @@ export default {
       if (winnerInfos.length === 0) return false;
       return winnerInfos.includes(this.visualPlayer?.info!);
     },
-    newGame() {
-      const boards = [] as Board[];
-      const maxBoards = this.interactive ? 5 : 3;
-      for (let i = 0; i < Math.floor(Math.random() * maxBoards + 1); i++) {
-        boards.push(randomBoard());
-      }
-
-      let game: Game<VisualState>;
-      if (this.interactive) {
-        // We'll use a Promise and its resolver to "pipe" between getActionCallback
-        // and actionCallback. When getActionCallback is called, it returns a
-        // Promise<Action> and stores its resolver. When actionCallback is called
-        // (by the slice tool), it resolves the stored Promise.
-
-        let resolveAction: ((action: Action) => void) | null = null;
-
-        // The actionCallback will be called inside the slice tool's onMouseDown
-        // function. It shall resolve the getActionCallback promise
-        const actionCallback = (slice: Slice, board: Board) => {
-          if (resolveAction) {
-            resolveAction({ slice, board });
-            resolveAction = null;
-          }
-        };
-
-        // The getActionCallback will be used when the player needs to make a
-        // turn. It shall just wait for the slice tool to be used, returns a
-        // promise of an action.
-        const getActionCallback = (state: VisualState) => {
-          return new Promise<Action>((resolve) => {
-            resolveAction = resolve;
-          });
-        };
-
-        const visualPlayer = new VisualPlayer("User", 0, getActionCallback);
-        this.visualPlayer = visualPlayer;
-        const randomPlayer = new RandomPlayer(1);
-
-        game = new Game<VisualState>(
-          new VisualState(
-            [visualPlayer.info, randomPlayer.info],
-            boards,
-            actionCallback
-          ),
-          [visualPlayer, randomPlayer]
-        );
-      } else {
-        const randomPlayer1 = new RandomPlayer(0, "P1");
-        const randomPlayer2 = new RandomPlayer(1, "P2");
-
-        game = new Game<VisualState>(
-          new VisualState(
-            [randomPlayer1.info, randomPlayer2.info],
-            boards,
-            () => {}
-          ),
-          [randomPlayer1, randomPlayer2]
-        );
-      }
-      this.setUpInteractiveTools();
-
-      this.game = game;
-      this.game.playLoop().then(() => {
-        // If the game finishes and interactive mode is off, restart a new game
-        // after a delay
-        if (!this.interactive) {
-          setTimeout(() => {
-            this.newGame();
-          }, 2000);
-        }
-      });
-    },
     shuffleBoards() {
       if (!this.game) return;
-      this.game.getState().shuffleBoards(paper.view.size);
+      this.game.state.shuffleBoards(paper.view.size);
     },
     redrawFunc(event: RedrawEvent, project: paper.Project, view: paper.View) {
       if (!this.game) return;
@@ -307,7 +237,7 @@ export default {
         neutral: neutralColor,
       } = getDaisyUIColors();
 
-      const paperBoards = Object.values(this.game!.getState().paperBoards);
+      const paperBoards = Object.values(this.game.state.paperBoards);
 
       const groups = [] as paper.Group[];
       const overlayGroup = new paper.Group();
@@ -356,7 +286,7 @@ export default {
           // Center line attraction
           //   const centerPoint = centerLine(view);
 
-          this.game!.getState().updatePositions(event.delta, centerPoint);
+          this.game.state.updatePositions(event.delta, centerPoint);
         }
 
         for (const board of paperBoards) {
@@ -369,12 +299,12 @@ export default {
           groups.push(boardGroup);
 
           // Add the slice marker if active
-          if (this.game!.getState().sliceIndicator) {
+          if (this.game.state.sliceIndicator) {
             const { boardUUID, direction, index } =
-              this.game!.getState().sliceIndicator!;
-            const board = this.game!.getState().paperBoards[boardUUID];
+              this.game.state.sliceIndicator!;
+            const board = this.game.state.paperBoards[boardUUID];
             if (board) {
-              const sliceMarker = this.game!.getState().renderSliceIndicator(
+              const sliceMarker = this.game.state.renderSliceIndicator(
                 boardUUID,
                 direction,
                 index,
@@ -388,14 +318,12 @@ export default {
           }
         }
 
-        zoomToFit = !this.game!.getState().selectedBoardUUID;
+        zoomToFit = !this.game.state.selectedBoardUUID;
 
-        if (this.game!.getState().selectedBoardUUID) {
+        if (this.game.state.selectedBoardUUID) {
           // Ensure the dragged board is fully visible
           const selectedBoard =
-            this.game!.getState().paperBoards[
-              this.game!.getState().selectedBoardUUID!
-            ];
+            this.game.state.paperBoards[this.game.state.selectedBoardUUID!];
           if (selectedBoard) {
             groups
               .find(
@@ -434,13 +362,13 @@ export default {
         const newZoom = project.view.zoom + diff * (zoomSpeed * timeDelta);
 
         project.view.zoom = newZoom;
-        this.game!.getState().zoomLevel = newZoom;
+        this.game.state.zoomLevel = newZoom;
 
         // Re-enable overlay group
         overlayGroup.visible = true;
       } else {
         // Use the stored zoom level
-        project.view.zoom = this.game!.getState().zoomLevel;
+        project.view.zoom = this.game.state.zoomLevel;
       }
       if (axisLine) {
         // Simple axis underlay
@@ -468,26 +396,14 @@ export default {
 </script>
 <template>
   <div v-if="interactive">
-    <div class="fixed m-10 flex gap-4">
-      <button class="btn btn-lg btn-primary" @click="newGame">New Game</button>
-    </div>
-
-    <div class="fixed m-10 flex gap-4 left-0 bottom-0">
-      <button class="btn btn-lg btn-primary" @click="shuffleBoards">
-        Shuffle boards
-      </button>
-    </div>
-
     <div
-      class="fixed m-10 flex gap-4 right-0 bottom-0 flex-col items-end -z-50"
+      class="fixed m-4 flex gap-4 right-0 bottom-0 flex-col items-end -z-50 *:text-xs"
     >
-      <span class="btn btn-lg btn-ghost">Hold Shift to drag boards</span>
-      <span class="btn btn-lg btn-ghost"
-        >Click on grid lines to slice boards</span
-      >
-      <span class="btn btn-lg btn-ghost">Last player to take a turn wins</span>
+      <span>Hold Shift to drag boards</span>
+      <span>Click on grid lines to slice boards</span>
+      <span>Last player to take a turn wins</span>
     </div>
-    <div class="fixed m-10 flex gap-4 right-0 flex-col items-end">
+    <div class="fixed m-4 flex gap-4 right-0 flex-col items-end z-1">
       <details
         class="collapse collapse-arrow bg-base-100 border-base-300 border"
       >
@@ -508,7 +424,7 @@ export default {
             </thead>
             <tbody>
               <tr
-                v-for="(entry, index) in game?.getState().turnHistory"
+                v-for="(entry, index) in game?.state.turnHistory"
                 :key="index"
               >
                 <td>{{ index + 1 }}</td>

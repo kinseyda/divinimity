@@ -10,7 +10,7 @@ import {
   type Slice,
   type TileCoordinate,
   type TurnResult,
-} from "../model/Game";
+} from "./BaseModel";
 
 import paper from "paper";
 export type RedrawEvent = paper.Event & {

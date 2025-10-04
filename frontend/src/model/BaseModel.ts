@@ -317,22 +317,14 @@ export abstract class BaseState {
 
 // Base class for a Divinim game
 export class Game<TState extends BaseState> {
-  protected state: TState;
-  protected players: Player<TState>[];
+  state: TState;
+  players: Player<TState>[];
   // Players should be sorted by their turnRemainder
 
   constructor(initialState: TState, players: Player<TState>[]) {
     this.state = initialState;
     this.players = players;
     this.players.sort((a, b) => a.info.turnRemainder - b.info.turnRemainder);
-  }
-
-  public getState(): TState {
-    return this.state;
-  }
-
-  public setState(newState: TState): void {
-    this.state = newState;
   }
 
   public get winners(): PlayerInfo[] {
@@ -385,7 +377,7 @@ export class Game<TState extends BaseState> {
   }
 
   public playTurn(turn: Turn): void {
-    this.setState(this.simulateTurn(turn));
+    this.state = this.simulateTurn(turn);
     this.state.turnHistory.push(turn);
   }
 

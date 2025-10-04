@@ -4,7 +4,7 @@
 
 <script lang="ts">
 import paper from "paper";
-import type { RedrawEvent } from "./PaperUtils";
+import type { RedrawEvent } from "../model/VisualModel";
 
 export default {
   data() {

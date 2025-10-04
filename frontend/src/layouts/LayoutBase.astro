@@ -20,11 +20,7 @@ const astroInfo = {
     <title>Divinimity</title>
   </head>
   <body>
-    <div class="relative min-h-screen">
-      <div class="relative flex flex-col h-screen items-center">
-        <slot />
-      </div>
-    </div>
+    <slot />
     <DebugInfo client:load astroInfo={astroInfo} />
   </body>
 

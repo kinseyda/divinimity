@@ -3,7 +3,7 @@
   "type": "module",
   "version": "0.0.1",
   "scripts": {
-    "dev": "astro dev",
+    "dev": "astro dev --host ",
     "build": "astro build",
     "preview": "astro preview",
     "astro": "astro"
@@ -18,7 +18,12 @@
     "daisyui": "^5.0.50",
     "nanostores": "^1.0.1",
     "paper": "^0.12.18",
+    "rethinkdb": "^2.4.2",
     "tailwindcss": "^4.1.11",
+    "vite-plugin-node-polyfills": "^0.24.0",
     "vue": "^3.5.18"
+  },
+  "devDependencies": {
+    "@types/rethinkdb": "^2.3.21"
   }
 }

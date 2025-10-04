@@ -1,12 +1,12 @@
 ---
-import Background from "../components/Background.astro";
+import Background from "../components/Background.vue";
 import Layout from "../layouts/Layout.astro";
 import "../styles/global.css";
 ---
 
 <Layout>
   <div
-    class="hero bg-base-200 w-sm h-56 rounded-4xl border-primary border-8"
+    class="hero bg-base-200/50 backdrop-blur-lg w-sm h-56 rounded-4xl border-primary border-8"
     slot="content"
   >
     <div class="hero-content text-center">
@@ -19,5 +19,5 @@ import "../styles/global.css";
       </div>
     </div>
   </div>
-  <Background slot="background" />
+  <Background slot="background" client:only />
 </Layout>

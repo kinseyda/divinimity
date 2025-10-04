@@ -37,13 +37,54 @@
             <legend class="fieldset-legend">Second Player</legend>
             <select class="select" v-model="secondPlayerType">
               <option :value="PlayerType.Random">Random Player</option>
-              <option :value="PlayerType.Network">Network Player</option>
+              <option :value="PlayerType.NetworkInitiator">
+                Network (Host new game)
+              </option>
+              <option :value="PlayerType.NetworkResponder">
+                Network (Join a game)
+              </option>
             </select>
           </fieldset>
+          <fieldset
+            class="fieldset"
+            v-if="secondPlayerType === PlayerType.Random"
+          >
+            <legend class="fieldset-legend">Random Player Delay</legend>
+            <input
+              type="range"
+              class="range range-primary"
+              min="0"
+              max="1000"
+              step="100"
+              v-model="randomPlayerDelay"
+            />
+            <div class="flex justify-between px-2.5 mt-2 text-xs">
+              <span>0 ms</span>
+              <span>1000 ms</span>
+            </div>
+          </fieldset>
+
+          <label
+            class="label validator"
+            v-if="secondPlayerType === PlayerType.NetworkResponder"
+          >
+            <input
+              type="text"
+              required
+              class="input input-bordered w-full"
+              placeholder="Game ID"
+              pattern="[a-z]{6}"
+              minlength="6"
+              maxlength="6"
+              title="6 lowercase letters"
+            />
+          </label>
+          <p class="validator-hint">Enter a valid game ID</p>
+          <button class="btn btn-secondary mt-2" @click="pingMultiplayerServer">
+            Ping Multiplayer Server
+          </button>
         </li>
-        <li>
-          {{ secondPlayerType }}
-        </li>
+
         <li class="fixed bottom-0 right-0 m-4">
           <button class="btn btn-primary btn-lg w-full" @click="newGame">
             New Game
@@ -75,23 +116,33 @@ export default {
   data() {
     return {
       PlayerType,
-      localPlayer: undefined as VisualPlayer | undefined,
-      otherPlayer: undefined as
-        | VisualPlayer
-        | NetworkPlayer
-        | RandomPlayer
-        | undefined,
       game: undefined as Game<VisualState> | undefined,
     };
   },
   setup() {
     const secondPlayerType = useVModel(gameSetupStore, "secondPlayerType");
-    return { secondPlayerType };
+    const randomPlayerDelay = useVModel(gameSetupStore, "randomPlayerDelay");
+    return { secondPlayerType, randomPlayerDelay };
   },
   mounted() {
     this.newGame();
   },
   methods: {
+    pingMultiplayerServer() {
+      fetch("http://localhost:3000/ping")
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("Network response was not ok");
+          }
+          return response.text();
+        })
+        .then((data) => {
+          console.log("Ping response:", data);
+        })
+        .catch((error) => {
+          console.error("There was a problem with the fetch operation:", error);
+        });
+    },
     newGame() {
       const boards = [] as Board[];
       const maxBoards = 5;
@@ -125,16 +176,32 @@ export default {
       };
 
       const visualPlayer = new VisualPlayer("User", 0, getActionCallback);
-      this.localPlayer = visualPlayer;
-      const randomPlayer = new RandomPlayer(1);
+      let secondPlayer;
+
+      switch (this.secondPlayerType) {
+        case PlayerType.Random:
+          secondPlayer = new RandomPlayer(
+            1,
+            "Random CPU",
+            this.randomPlayerDelay
+          );
+          break;
+        case PlayerType.NetworkInitiator:
+          secondPlayer = new NetworkPlayer("Network", 1);
+          break;
+        case PlayerType.NetworkResponder:
+          throw new Error("Not implemented yet");
+        default:
+          throw new Error("Unknown player type");
+      }
 
       this.game = new Game<VisualState>(
         new VisualState(
-          [visualPlayer.info, randomPlayer.info],
+          [visualPlayer.info, secondPlayer.info],
           boards,
           actionCallback
         ),
-        [visualPlayer, randomPlayer]
+        [visualPlayer, secondPlayer]
       );
       this.game.playLoop();
     },

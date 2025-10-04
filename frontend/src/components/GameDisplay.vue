@@ -28,7 +28,7 @@ import {
   type PaperBoard,
   type RedrawEvent,
 } from "../model/VisualModel";
-import { getDaisyUIColors } from "../utils/StyleUtils";
+import { getDaisyUIColors } from "../model/StyleUtils";
 
 function centerLine(view: paper.View): paper.Path.Line {
   const width = view.size.width;
@@ -76,7 +76,6 @@ export default {
     return {
       sliceTool: null as paper.Tool | null,
       dragTool: null as paper.Tool | null,
-      visualPlayer: null as VisualPlayer | null,
     };
   },
   props: {
@@ -199,12 +198,20 @@ export default {
     actionToString(action: Action): string {
       return actionToString(action);
     },
+    getVisualPlayer(): VisualPlayer | null {
+      if (!this.game) return null;
+      const players = this.game.players.filter(
+        (p) => p instanceof VisualPlayer
+      ) as VisualPlayer[];
+      if (players.length === 0) return null;
+      return players[0];
+    },
     winnerString(): string {
       if (!this.game) return "";
       const winnerInfos = this.game.winners;
       if (winnerInfos.length === 0) return "";
       if (winnerInfos.length === 1) {
-        if (winnerInfos[0] === this.visualPlayer?.info) {
+        if (winnerInfos[0] === this.getVisualPlayer()?.info) {
           return `You win!`;
         }
         return `Winner: ${winnerInfos[0].name}`;
@@ -215,7 +222,7 @@ export default {
       if (!this.game) return false;
       const winnerInfos = this.game.winners;
       if (winnerInfos.length === 0) return false;
-      return winnerInfos.includes(this.visualPlayer?.info!);
+      return winnerInfos.includes(this.getVisualPlayer()?.info!);
     },
     shuffleBoards() {
       if (!this.game) return;

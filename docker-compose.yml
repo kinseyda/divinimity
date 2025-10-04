@@ -1,0 +1,36 @@
+# Docker Compose file for Divinimity production environment.
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "8080:8080"
+    depends_on:
+      - backend
+    environment:
+      - BACKEND_URL=http://backend:3000
+
+  backend:
+    build:
+      context: ./backend
+    command: node src/index.js
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - RETHINKDB_HOST=db
+      - RETHINKDB_PORT=28015
+    depends_on:
+      - db
+
+  db:
+    image: rethinkdb:latest
+    ports:
+      - "8081:8080"
+      - "28015:28015"
+    volumes:
+      - rethinkdb_data:/data
+
+volumes:
+  rethinkdb_data:

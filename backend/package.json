@@ -1,0 +1,24 @@
+{
+  "name": "divinimity-backend",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "rethinkdb": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.6.2",
+    "@types/rethinkdb": "^2.3.21",
+    "nodemon": "^3",
+    "ts-node": "^10",
+    "typescript": "^5"
+  }
+}

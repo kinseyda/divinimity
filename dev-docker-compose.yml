@@ -1,0 +1,44 @@
+# Docker Compose file for Divinimity development environment.
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    command: npm run dev
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "4321:4321" # Astro dev server
+    environment:
+      - NODE_ENV=development
+      - BACKEND_URL=http://backend:3000
+    depends_on:
+      - backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    command: npm run dev
+    volumes:
+      - ./backend:/app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - RETHINKDB_HOST=db
+      - RETHINKDB_PORT=28015
+    depends_on:
+      - db
+
+  db:
+    image: rethinkdb:latest
+    ports:
+      - "8081:8080" # Admin UI
+      - "28015:28015"
+    volumes:
+      - rethinkdb_data:/data # easy to disable if not needed
+
+volumes:
+  rethinkdb_data:

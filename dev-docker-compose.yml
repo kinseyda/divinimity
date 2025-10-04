@@ -13,7 +13,6 @@ services:
       - "4321:4321" # Astro dev server
     environment:
       - NODE_ENV=development
-      - BACKEND_URL=http://backend:3000
     depends_on:
       - backend
   backend:

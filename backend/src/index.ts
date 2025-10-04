@@ -2,8 +2,11 @@ import express from "express";
 import cors from "cors";
 // import { connect } from "rethinkdb";
 
-const allowedOrigins = ["http://divinimity.kinseyda.com"];
-const devOrigins = ["http://localhost:4321", "http://localhost:3000"];
+const allowedOrigins = [process.env.PUBLIC_URL || "http://localhost:4321"];
+const devOrigins = [
+  "http://localhost:4321", // Vite / Astro
+  "http://localhost:3000", // This Express server
+];
 const allOrigins = [...allowedOrigins, ...devOrigins];
 
 const app = express();
@@ -11,25 +14,26 @@ app.use(express.json());
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Disallow requests with no origin (like mobile apps or curl requests)
-      if (!origin)
-        return callback(new Error("Not allowed by CORS - No Origin"));
+      if (!origin) return callback(null, true); // allow REST tools or curl requests with no origin
+
       if (allOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
-        callback(new Error("Not allowed by CORS - Invalid Origin"));
+        callback(new Error(`Not allowed by CORS - '${origin}'`));
       }
     },
   })
 );
 
+const prefix = process.env.PUBLIC_BACKEND_PREFIX || "multiplayer";
+
 // Endpoint: ping
 //  endpoint to check server status
-app.get("/ping", (_, res) => res.send("pong"));
+app.get(`/${prefix}/ping`, (_, res) => res.send("pong"));
 
 // Endpoint: health
 //  endpoint to check server health
-app.get("/health", (_, res) => res.send("OK"));
+app.get(`${prefix}/health`, (_, res) => res.send("OK"));
 
 // Endpoint:
 

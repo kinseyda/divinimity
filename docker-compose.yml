@@ -2,35 +2,30 @@
 
 services:
   frontend:
-    build:
-      context: ./frontend
+    image: ghcr.io/kinseyda/divinimity:main-frontend
     ports:
-      - "8080:8080"
+      - "14900:8080"
     depends_on:
       - backend
     environment:
-      - BACKEND_URL=http://backend:3000
-
+      - NODE_ENV=production
+      - PUBLIC_BACKEND_PREFIX=multiplayer
+      - PUBLIC_URL=https://divinimity.kinseyda.com
   backend:
-    build:
-      context: ./backend
-    command: node src/index.js
+    image: ghcr.io/kinseyda/divinimity:main-backend
     ports:
-      - "3000:3000"
+      - "14901:3000"
     environment:
       - NODE_ENV=production
-      - RETHINKDB_HOST=db
-      - RETHINKDB_PORT=28015
+      - PUBLIC_BACKEND_PREFIX=multiplayer
+      - PUBLIC_URL=https://divinimity.kinseyda.com
     depends_on:
       - db
-
   db:
     image: rethinkdb:latest
     ports:
-      - "8081:8080"
-      - "28015:28015"
+      - "14902:8080"
     volumes:
       - rethinkdb_data:/data
-
 volumes:
   rethinkdb_data:

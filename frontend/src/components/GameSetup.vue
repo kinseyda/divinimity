@@ -110,6 +110,9 @@ import { randomBoard, VisualPlayer, VisualState } from "../model/VisualModel";
 import GameDisplay from "./GameDisplay.vue";
 import { gameSetupStore, PlayerType } from "./GameSetupStore";
 
+const backendUrl = import.meta.env.PUBLIC_URL || "http://localhost:3000";
+const backendPrefix = import.meta.env.PUBLIC_BACKEND_PREFIX || "multiplayer";
+
 export default {
   components: { GameDisplay, XMarkIcon, WrenchIcon },
   emits: {},
@@ -129,7 +132,12 @@ export default {
   },
   methods: {
     pingMultiplayerServer() {
-      fetch("http://localhost:3000/ping")
+      console.log(
+        "Pinging multiplayer server at",
+        `${backendUrl}/${backendPrefix}/ping`
+      );
+
+      fetch(`${backendUrl}/${backendPrefix}/ping`)
         .then((response) => {
           if (!response.ok) {
             throw new Error("Network response was not ok");

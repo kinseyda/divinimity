@@ -402,14 +402,7 @@ export default {
 };
 </script>
 <template>
-  <div v-if="interactive">
-    <div
-      class="fixed m-4 flex gap-4 right-0 bottom-0 flex-col items-end -z-50 *:text-xs"
-    >
-      <span>Hold Shift to drag boards</span>
-      <span>Click on grid lines to slice boards</span>
-      <span>Last player to take a turn wins</span>
-    </div>
+  <div v-if="interactive" class="">
     <div class="fixed m-4 flex gap-4 right-0 flex-col items-end z-1">
       <details
         class="collapse collapse-arrow bg-base-100 border-base-300 border"

@@ -8,6 +8,8 @@ const astroInfo = {
   generator: Astro.generator,
   buildDate: new Date().toISOString(), // Note this is run at build time
 };
+
+const isDev = import.meta.env.DEV;
 ---
 
 <!doctype html>
@@ -17,7 +19,7 @@ const astroInfo = {
     <meta name="viewport" content="width=device-width" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="generator" content={Astro.generator} />
-    <title>Divinimity</title>
+    <title>Divinimity{isDev ? " - Development" : ""}</title>
   </head>
   <body>
     <slot />

@@ -1,4 +1,5 @@
 import { persistentMap } from "@nanostores/persistent";
+import z from "zod";
 
 export enum PlayerType {
   Random = "Random",
@@ -23,3 +24,8 @@ export const gameSetupStore = persistentMap<GameSetupOptions>(
     decode: JSON.parse,
   }
 );
+
+const gameSetupValidation = z.object({
+  secondPlayerType: z.nativeEnum(PlayerType),
+  randomPlayerDelay: z.number().min(0).max(10000),
+});

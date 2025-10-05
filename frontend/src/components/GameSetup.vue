@@ -1,102 +1,99 @@
 <template>
-  <div class="drawer lg:drawer-open size-full">
-    <input id="game-setup-drawer" type="checkbox" class="drawer-toggle" />
-    <div class="drawer-content">
-      <!-- Content beside the drawer goes here -->
-      <div class="size-full relative">
-        <div class="fab lg:hidden">
-          <label
-            for="game-setup-drawer"
-            class="btn btn-lg btn-primary btn-circle drawer-button lg:hidden absolute bottom-0 left-0 m-4 z-1"
-          >
-            <WrenchIcon class="size-8" />
-          </label>
-        </div>
-        <div v-if="game">
+  <DrawerContent
+    drawerId="game-setup-drawer"
+    drawerTitle="Game Setup"
+    :drawerLeft="true"
+  >
+    <template #fabIcon>
+      <WrenchIcon class="size-8" />
+    </template>
+    <template #content>
+      <DrawerContent
+        drawerId="game-info-drawer"
+        drawerTitle="Current Game Info"
+        :drawerLeft="false"
+        v-if="game"
+      >
+        <template #fabIcon>
+          <InformationCircleIcon class="size-8" />
+        </template>
+        <template #content>
           <GameDisplay :interactive="true" :game="game" />
+        </template>
+        <template #drawerContent>
+          <div>Info goes here TODO</div>
+          <div class="flex flex-col gap-2 text-xs fixed bottom-0 left-0 m-8">
+            <span>Hold Shift to drag boards</span>
+            <span>Click on grid lines to slice boards</span>
+            <span>Last player to take a turn wins</span>
+          </div>
+        </template>
+      </DrawerContent>
+    </template>
+    <template #drawerContent>
+      <fieldset class="fieldset">
+        <legend class="fieldset-legend">Second Player</legend>
+        <select class="select" v-model="secondPlayerType">
+          <option :value="PlayerType.Random">Random Player</option>
+          <option :value="PlayerType.NetworkInitiator">
+            Network (Host new game)
+          </option>
+          <option :value="PlayerType.NetworkResponder">
+            Network (Join a game)
+          </option>
+        </select>
+      </fieldset>
+      <fieldset class="fieldset" v-if="secondPlayerType === PlayerType.Random">
+        <legend class="fieldset-legend">Random Player Delay</legend>
+        <input
+          type="range"
+          class="range range-primary"
+          min="0"
+          max="1000"
+          step="100"
+          v-model="randomPlayerDelay"
+        />
+        <div class="flex justify-between px-2.5 mt-2 text-xs">
+          <span>0 ms</span>
+          <span>1000 ms</span>
         </div>
-      </div>
-    </div>
-    <div class="drawer-side size-full flex flex-col">
-      <!-- using size-full here because the daisyUi drawer-side class sets the
-      height to 100dvh -->
-      <label for="game-setup-drawer" class="drawer-overlay"></label>
-      <ul class="bg-base-200 z-50 size-full w-xs h-full p-4 gap-4">
-        <li>
-          <span class="flex justify-between items-center">
-            <h2 class="text-2xl font-bold">Game Setup</h2>
-            <label
-              class="btn btn-ghost btn-square lg:hidden"
-              for="game-setup-drawer"
-            >
-              <XMarkIcon /> </label
-          ></span>
-        </li>
-        <li>
-          <fieldset class="fieldset">
-            <legend class="fieldset-legend">Second Player</legend>
-            <select class="select" v-model="secondPlayerType">
-              <option :value="PlayerType.Random">Random Player</option>
-              <option :value="PlayerType.NetworkInitiator">
-                Network (Host new game)
-              </option>
-              <option :value="PlayerType.NetworkResponder">
-                Network (Join a game)
-              </option>
-            </select>
-          </fieldset>
-          <fieldset
-            class="fieldset"
-            v-if="secondPlayerType === PlayerType.Random"
-          >
-            <legend class="fieldset-legend">Random Player Delay</legend>
-            <input
-              type="range"
-              class="range range-primary"
-              min="0"
-              max="1000"
-              step="100"
-              v-model="randomPlayerDelay"
-            />
-            <div class="flex justify-between px-2.5 mt-2 text-xs">
-              <span>0 ms</span>
-              <span>1000 ms</span>
-            </div>
-          </fieldset>
+      </fieldset>
 
-          <label
-            class="label validator"
-            v-if="secondPlayerType === PlayerType.NetworkResponder"
-          >
-            <input
-              type="text"
-              required
-              class="input input-bordered w-full"
-              placeholder="Game ID"
-              pattern="[a-z]{6}"
-              minlength="6"
-              maxlength="6"
-              title="6 lowercase letters"
-            />
-          </label>
-          <p class="validator-hint">Enter a valid game ID</p>
-          <button class="btn btn-secondary mt-2" @click="pingMultiplayerServer">
-            Ping Multiplayer Server
-          </button>
-        </li>
+      <label
+        class="label validator"
+        v-if="secondPlayerType === PlayerType.NetworkResponder"
+      >
+        <input
+          type="text"
+          required
+          class="input input-bordered w-full"
+          placeholder="Game ID"
+          pattern="[a-z]{6}"
+          minlength="6"
+          maxlength="6"
+          title="6 lowercase letters"
+        />
+      </label>
+      <p class="validator-hint">Enter a valid game ID</p>
+      <button class="btn btn-secondary mt-2" @click="pingMultiplayerServer">
+        Ping Multiplayer Server
+      </button>
 
-        <li class="fixed bottom-0 right-0 m-4">
-          <button class="btn btn-primary btn-lg w-full" @click="newGame">
-            New Game
-          </button>
-        </li>
-      </ul>
-    </div>
-  </div>
+      <button
+        class="btn btn-primary btn-lg fixed bottom-0 right-0 m-8"
+        @click="newGame"
+      >
+        New Game
+      </button>
+    </template>
+  </DrawerContent>
 </template>
-
 <script lang="ts">
-import { XMarkIcon, WrenchIcon } from "@heroicons/vue/24/outline";
+import {
+  XMarkIcon,
+  WrenchIcon,
+  InformationCircleIcon,
+} from "@heroicons/vue/24/outline";
 import { useVModel } from "@nanostores/vue";
 import {
   Game,
@@ -109,6 +106,8 @@ import { NetworkPlayer } from "../model/Network";
 import { randomBoard, VisualPlayer, VisualState } from "../model/VisualModel";
 import GameDisplay from "./GameDisplay.vue";
 import { gameSetupStore, PlayerType } from "./GameSetupStore";
+import DrawerContent from "./DrawerContent.vue";
+import { Fragment } from "vue";
 
 const backendUrl = import.meta.env.PUBLIC_BACKEND_URL;
 
@@ -117,7 +116,7 @@ if (!backendUrl) {
 }
 
 export default {
-  components: { GameDisplay, XMarkIcon, WrenchIcon },
+  components: { GameDisplay, InformationCircleIcon, WrenchIcon, DrawerContent },
   emits: {},
   data() {
     return {

@@ -110,15 +110,10 @@ import { randomBoard, VisualPlayer, VisualState } from "../model/VisualModel";
 import GameDisplay from "./GameDisplay.vue";
 import { gameSetupStore, PlayerType } from "./GameSetupStore";
 
-const backendUrl = import.meta.env.PUBLIC_URL;
-const backendPrefix = import.meta.env.PUBLIC_BACKEND_PREFIX;
+const backendUrl = import.meta.env.PUBLIC_BACKEND_URL;
 
 if (!backendUrl) {
-  throw new Error("PUBLIC_URL is not set");
-}
-
-if (!backendPrefix) {
-  throw new Error("PUBLIC_BACKEND_PREFIX is not set");
+  throw new Error("PUBLIC_BACKEND_URL is not set");
 }
 
 export default {
@@ -140,12 +135,9 @@ export default {
   },
   methods: {
     pingMultiplayerServer() {
-      console.log(
-        "Pinging multiplayer server at",
-        `${backendUrl}/${backendPrefix}/ping`
-      );
+      console.log("Pinging multiplayer server at", `${backendUrl}/ping`);
 
-      fetch(`${backendUrl}/${backendPrefix}/ping`)
+      fetch(`${backendUrl}/ping`)
         .then((response) => {
           if (!response.ok) {
             throw new Error("Network response was not ok");

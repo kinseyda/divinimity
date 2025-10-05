@@ -21,7 +21,7 @@ env:
   # github.repository as <account>/<repo>
   IMAGE_NAME: ${{ github.repository }}
   PUBLIC_URL: https://divinimity.kinseyda.com
-  PUBLIC_BACKEND_PREFIX: multiplayer
+  PUBLIC_BACKEND_URL: https://divinimity.kinseyda.com/multiplayer
 
 jobs:
   build:
@@ -79,7 +79,7 @@ jobs:
           file: ./frontend/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           build-args: |
-            PUBLIC_BACKEND_PREFIX=multiplayer
+            PUBLIC_BACKEND_URL=https://divinimity.kinseyda.com/multiplayer
             PUBLIC_URL=https://divinimity.kinseyda.com
           tags: ${{ steps.meta.outputs.tags }}-frontend
           labels: ${{ steps.meta.outputs.labels }}

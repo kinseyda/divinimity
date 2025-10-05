@@ -25,15 +25,13 @@ app.use(
   })
 );
 
-const prefix = process.env.PUBLIC_BACKEND_PREFIX || "multiplayer";
-
 // Endpoint: ping
 //  endpoint to check server status
-app.get(`/${prefix}/ping`, (_, res) => res.send("pong"));
+app.get(`/ping`, (_, res) => res.send("pong"));
 
 // Endpoint: health
 //  endpoint to check server health
-app.get(`${prefix}/health`, (_, res) => res.send("OK"));
+app.get(`/health`, (_, res) => res.send("OK"));
 
 // Endpoint:
 

@@ -13,8 +13,9 @@ services:
       - "4321:4321" # Astro dev server
     environment:
       - NODE_ENV=development
-      - PUBLIC_BACKEND_PREFIX=multiplayer
-      - PUBLIC_URL=https://divinimity.kinseyda.com
+      # Public here means it is passed to the browser by Astro / Vite
+      - PUBLIC_BACKEND_URL=http://localhost:3000
+      - PUBLIC_URL=http://localhost:4321
     depends_on:
       - backend
   backend:
@@ -30,8 +31,8 @@ services:
       - NODE_ENV=development
       - RETHINKDB_HOST=db
       - RETHINKDB_PORT=28015
-      - PUBLIC_BACKEND_PREFIX=multiplayer
-      - PUBLIC_URL=https://divinimity.kinseyda.com
+      - PUBLIC_BACKEND_URL=http://localhost:3000
+      - PUBLIC_URL=http://localhost:4321
     depends_on:
       - db
 
@@ -41,7 +42,7 @@ services:
       - "8081:8080" # Admin UI
       - "28015:28015"
     volumes:
-      - rethinkdb_data:/data # easy to disable if not needed
+      - rethinkdb_data:/data
 
 volumes:
   rethinkdb_data:

@@ -1,6 +1,13 @@
 # ===== Build Stage =====
 FROM node:lts-alpine AS build
 WORKDIR /app
+
+
+ARG PUBLIC_URL
+ENV PUBLIC_URL=$PUBLIC_URL
+ARG PUBLIC_BACKEND_PREFIX
+ENV PUBLIC_BACKEND_PREFIX=$PUBLIC_BACKEND_PREFIX
+
 COPY package*.json ./
 RUN npm install
 COPY . .

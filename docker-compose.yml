@@ -9,16 +9,12 @@ services:
       - backend
     environment:
       - NODE_ENV=production
-      - PUBLIC_BACKEND_PREFIX=multiplayer
-      - PUBLIC_URL=https://divinimity.kinseyda.com
   backend:
     image: ghcr.io/kinseyda/divinimity:main-backend
     ports:
       - "14901:3000"
     environment:
       - NODE_ENV=production
-      - PUBLIC_BACKEND_PREFIX=multiplayer
-      - PUBLIC_URL=https://divinimity.kinseyda.com
     depends_on:
       - db
   db:

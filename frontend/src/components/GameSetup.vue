@@ -110,8 +110,16 @@ import { randomBoard, VisualPlayer, VisualState } from "../model/VisualModel";
 import GameDisplay from "./GameDisplay.vue";
 import { gameSetupStore, PlayerType } from "./GameSetupStore";
 
-const backendUrl = import.meta.env.PUBLIC_URL || "http://localhost:3000";
-const backendPrefix = import.meta.env.PUBLIC_BACKEND_PREFIX || "multiplayer";
+const backendUrl = import.meta.env.PUBLIC_URL;
+const backendPrefix = import.meta.env.PUBLIC_BACKEND_PREFIX;
+
+if (!backendUrl) {
+  throw new Error("PUBLIC_URL is not set");
+}
+
+if (!backendPrefix) {
+  throw new Error("PUBLIC_BACKEND_PREFIX is not set");
+}
 
 export default {
   components: { GameDisplay, XMarkIcon, WrenchIcon },

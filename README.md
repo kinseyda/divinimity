@@ -22,7 +22,10 @@ The project uses Docker for development and production.
 - The `docker-compose.yml` file shows how to set up the production environment.
   On the live server this is used, pulling the images from Docker Hub instead of
   building it. A github action builds and pushes the images to ghcr.io after
-  every push to main.
+  every push to main. The action sets the appropriate environment variables
+  for the backend and frontend, which are then passed to the containers at build
+  time, so the `docker-compose.yml` file does not set the public URL or backend
+  prefix.
 - The `dev-docker-compose.yml` file is used for local development, and includes
   a volume for the frontend code, so changes are reflected immediately, thanks
   also to Astro's hot-reloading.

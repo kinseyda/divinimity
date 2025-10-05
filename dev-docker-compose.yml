@@ -13,6 +13,8 @@ services:
       - "4321:4321" # Astro dev server
     environment:
       - NODE_ENV=development
+      - PUBLIC_BACKEND_PREFIX=multiplayer
+      - PUBLIC_URL=https://divinimity.kinseyda.com
     depends_on:
       - backend
   backend:
@@ -28,6 +30,8 @@ services:
       - NODE_ENV=development
       - RETHINKDB_HOST=db
       - RETHINKDB_PORT=28015
+      - PUBLIC_BACKEND_PREFIX=multiplayer
+      - PUBLIC_URL=https://divinimity.kinseyda.com
     depends_on:
       - db
 

@@ -78,6 +78,9 @@ jobs:
           context: ./frontend
           file: ./frontend/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
+          build-args: |
+            PUBLIC_BACKEND_PREFIX=multiplayer
+            PUBLIC_URL=https://divinimity.kinseyda.com
           tags: ${{ steps.meta.outputs.tags }}-frontend
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

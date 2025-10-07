@@ -1,9 +1,9 @@
 ---
-import GameSetup from "../components/GameSetup.vue";
+import PlayContainer from "../components/PlayContainer.vue";
 import LayoutFull from "../layouts/LayoutFull.astro";
 import "../styles/global.css";
 ---
 
 <LayoutFull>
-  <GameSetup client:only slot="content" />
+  <PlayContainer client:only slot="content" />
 </LayoutFull>

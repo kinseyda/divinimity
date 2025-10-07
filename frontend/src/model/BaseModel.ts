@@ -72,18 +72,63 @@ export interface Board {
   uuid: string;
 }
 
-export function boardToString(board: Board): string {
-  return `${board.dimensions.width}x${
-    board.dimensions.height
-  }, ${board.markedCoordinates.map(tileCoordinateToString).join(", ")}`;
+/**
+ * A simple hash function for boards, used for comparing boards.
+ * @param board
+ */
+export function boardHash(board: Board): string {
+  const dimensionHash = `${board.dimensions.width}:${board.dimensions.height}`;
+  // Boards can have many marked coordinates and we don't want hashes getting
+  // extremely long, so we will treat the board as a grid and create a binary
+  // representation of the marked coordinates, which we can then store as a
+  // simple integer.
+
+  let markedHash = 0;
+  for (const coord of board.markedCoordinates) {
+    const index = coord.y * board.dimensions.width + coord.x;
+    markedHash |= 1 << index;
+  }
+  const markedHashString = intToAlphaNumeric(markedHash);
+
+  return `${dimensionHash}-${markedHashString}`;
 }
 
-export function humanReadableUUID(uuid: string): string {
-  return uuid.split("-")[0] + "...";
-}
-
+/**
+ * NOT CRYPTOGRAPHICALLY SECURE
+ *
+ * Generates a simple small UUID-like string for identifying boards and players.
+ * Collision resistance is not super important, as this is just for identifying
+ * objects in memory, not for security. However, it should be reasonably
+ * unlikely to collide. The trade off is made for human readability and ease of
+ * use.
+ * @returns A random string of alphanumeric characters.
+ */
 function generateUUID(): string {
-  return crypto.randomUUID();
+  const len = 6;
+  const base62chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  // Base 62
+  return generateRandomString(len, base62chars);
+}
+
+function intToAlphaNumeric(num: number): string {
+  const chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const base = chars.length;
+  let result = "";
+  while (num > 0) {
+    result = chars.charAt(num % base) + result;
+    num = Math.floor(num / base);
+  }
+  return result;
+}
+
+function generateRandomString(len: number, chars: string): string {
+  let result = "";
+  for (let i = 0; i < len; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
 }
 
 export function newBoard(
@@ -98,11 +143,10 @@ export function newBoard(
 }
 
 export function actionToString(action: Action): string {
-  if (action.slice.direction === Direction.Horizontal) {
-    return `H${action.slice.line}-${humanReadableUUID(action.board.uuid)}`;
-  } else {
-    return `V${action.slice.line}-${humanReadableUUID(action.board.uuid)}`;
-  }
+  const dir = action.slice.direction === Direction.Horizontal ? "H" : "V";
+  return `${dir}${action.slice.line} / ${boardHash(action.board)} {${
+    action.board.uuid
+  }}`;
 }
 
 export interface Action {

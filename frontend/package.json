@@ -9,22 +9,22 @@
     "astro": "astro"
   },
   "dependencies": {
+    "@astrojs/check": "^0.9.4",
     "@astrojs/vue": "^5.1.0",
-    "@heroicons/vue": "^2.2.0",
+    "@lucide/astro": "^0.545.0",
     "@nanostores/persistent": "^1.1.0",
     "@nanostores/vue": "^1.0.1",
     "@tailwindcss/vite": "^4.1.11",
     "astro": "^5.12.8",
     "daisyui": "^5.0.50",
+    "lucide-vue-next": "^0.545.0",
     "nanostores": "^1.0.1",
     "paper": "^0.12.18",
     "rethinkdb": "^2.4.2",
     "tailwindcss": "^4.1.11",
+    "typescript": "^5.9.3",
     "vite-plugin-node-polyfills": "^0.24.0",
     "vue": "^3.5.18",
     "zod": "^3.25.76"
-  },
-  "devDependencies": {
-    "@types/rethinkdb": "^2.3.21"
   }
 }

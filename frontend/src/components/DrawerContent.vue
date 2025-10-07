@@ -1,15 +1,11 @@
 <script lang="ts">
-import {
-  XMarkIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-} from "@heroicons/vue/24/outline";
+import { X, ChevronLeft, ChevronRight } from "lucide-vue-next";
 
 export default {
   components: {
-    XMarkIcon,
-    ChevronLeftIcon,
-    ChevronRightIcon,
+    XMarkIcon: X,
+    ChevronLeftIcon: ChevronLeft,
+    ChevronRightIcon: ChevronRight,
   },
   props: {
     drawerId: {
@@ -71,7 +67,10 @@ export default {
           class="flex justify-between items-center lg:flex-row"
         >
           <h2 class="text-2xl font-bold">{{ drawerTitle }}</h2>
-          <label class="btn btn-ghost btn-square lg:hidden" :for="drawerId">
+          <label
+            class="btn btn-ghost btn-square lg:hidden *:size-full"
+            :for="drawerId"
+          >
             <ChevronLeftIcon v-if="drawerLeft" />
             <ChevronRightIcon v-else />
           </label>

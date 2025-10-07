@@ -1,10 +1,5 @@
 ---
-import {
-  AdjustmentsHorizontalIcon,
-  Bars3Icon,
-  MoonIcon,
-  SunIcon,
-} from "@heroicons/vue/24/outline";
+import { Settings, Menu, Moon, Sun } from "@lucide/astro";
 
 let { pathname } = Astro.url;
 pathname = pathname.replace(/\/+$/, "").replace(/^\/+/, ""); // Remove trailing and leading slashes
@@ -14,22 +9,22 @@ pathname = pathname.replace(/\/+$/, "").replace(/^\/+/, ""); // Remove trailing 
   <div class="navbar-start">
     <div class="dropdown">
       <div tabindex="0" role="button" class="btn btn-ghost lg:hidden">
-        <Bars3Icon class="h-10 w-10" role="button" />
+        <Menu class="h-10 w-10" role="button" />
       </div>
       <ul
         tabindex="0"
         class="menu menu-lg dropdown-content bg-base-200 rounded-box z-1 mt-3 w-52 p-2 shadow"
       >
         <li>
-          <a href="/" class:list={[pathname === "" ? "outline" : ""]}>Home</a>
+          <a href="/" class:list={[pathname === "" ? "outline-2" : ""]}>Home</a>
         </li>
         <li>
-          <a href="/play" class:list={[pathname === "play" ? "outline" : ""]}
+          <a href="/play" class:list={[pathname === "play" ? "outline-2" : ""]}
             >Play</a
           >
         </li>
         <li>
-          <a href="/about" class:list={[pathname === "about" ? "outline" : ""]}
+          <a href="/about" class:list={[pathname === "about" ? "outline-2" : ""]}
             >About</a
           >
         </li>
@@ -38,17 +33,17 @@ pathname = pathname.replace(/\/+$/, "").replace(/^\/+/, ""); // Remove trailing 
     <a class="btn btn-ghost text-xl" href="/"> Divinimity </a>
   </div>
   <div class="navbar-center hidden lg:flex">
-    <ul class="menu menu-horizontal menu-lg px-1 gap-2">
+    <ul class="menu menu-horizontal menu-lg px-1 gap-16">
       <li>
-        <a href="/" class:list={[pathname === "" ? "outline" : ""]}>Home</a>
+        <a href="/" class:list={[pathname === "" ? "outline-2" : ""]}>Home</a>
       </li>
       <li>
-        <a href="/play" class:list={[pathname === "play" ? "outline" : ""]}
+        <a href="/play" class:list={[pathname === "play" ? "outline-2" : ""]}
           >Play</a
         >
       </li>
       <li>
-        <a href="/about" class:list={[pathname === "about" ? "outline" : ""]}
+        <a href="/about" class:list={[pathname === "about" ? "outline-2" : ""]}
           >About</a
         >
       </li>
@@ -56,9 +51,7 @@ pathname = pathname.replace(/\/+$/, "").replace(/^\/+/, ""); // Remove trailing 
   </div>
   <div class="navbar-end">
     <details class="dropdown dropdown-end">
-      <summary class="btn btn-ghost"
-        ><AdjustmentsHorizontalIcon class="h-10 w-10" /></summary
-      >
+      <summary class="btn btn-ghost"><Settings class="h-10 w-10" /></summary>
       <ul
         class="menu menu-vertical dropdown-content bg-base-200 rounded-box shadow"
       >
@@ -67,8 +60,8 @@ pathname = pathname.replace(/\/+$/, "").replace(/^\/+/, ""); // Remove trailing 
             <!-- this hidden checkbox controls the state -->
             <input type="checkbox" class="theme-controller" value="fantasy" />
 
-            <SunIcon class="swap-on h-10 w-10" />
-            <MoonIcon class="swap-off h-10 w-10" />
+            <Sun class="swap-on h-10 w-10" />
+            <Moon class="swap-off h-10 w-10" />
           </label>
         </li>
       </ul>

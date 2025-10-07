@@ -1,11 +1,11 @@
 <script lang="ts">
 import { useStore } from "@nanostores/vue";
 import { debugStore } from "./DebugStore";
-import { XMarkIcon } from "@heroicons/vue/24/outline";
+import { X } from "lucide-vue-next";
 
 export default {
   components: {
-    XMarkIcon,
+    XMarkIcon: X,
   },
   props: {
     astroInfo: {

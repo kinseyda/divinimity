@@ -3,9 +3,6 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "astro/config";
 
 import vue from "@astrojs/vue";
-import { nodePolyfills } from "vite-plugin-node-polyfills";
-
-
 
 // https://astro.build/config
 export default defineConfig({
@@ -14,10 +11,12 @@ export default defineConfig({
       host: true,
       watch: {
         usePolling: true,
+        // Polling for file changes every second, for development with the
+        // docker container
         interval: 1000,
       },
     },
-    plugins: [tailwindcss(), nodePolyfills()],
+    plugins: [tailwindcss()],
   },
 
   integrations: [vue()],

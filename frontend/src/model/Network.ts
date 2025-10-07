@@ -3,7 +3,6 @@ import { BaseState, Player, type Action } from "./BaseModel";
 function generateConnectionId(): string {
   // Simple function to generate a random connection ID
   // Connection IDs are 6 lowercase letters.
-  // TODO switch to UUIDs
   return Math.random().toString(36).substring(2, 8);
 }
 

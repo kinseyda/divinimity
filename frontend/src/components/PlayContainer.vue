@@ -5,7 +5,7 @@
     :drawerLeft="true"
   >
     <template #fabIcon>
-      <WrenchIcon class="size-8" />
+      <PencilRuler class="size-8" />
     </template>
     <template #content>
       <DrawerContent
@@ -15,7 +15,7 @@
         v-if="game"
       >
         <template #fabIcon>
-          <InformationCircleIcon class="size-8" />
+          <Info class="size-8" />
         </template>
         <template #content>
           <GameDisplay :interactive="true" :game="game" />
@@ -89,11 +89,7 @@
   </DrawerContent>
 </template>
 <script lang="ts">
-import {
-  XMarkIcon,
-  WrenchIcon,
-  InformationCircleIcon,
-} from "@heroicons/vue/24/outline";
+import { PencilRuler, Info, Pencil } from "lucide-vue-next";
 import { useVModel } from "@nanostores/vue";
 import {
   Game,
@@ -104,10 +100,9 @@ import {
 } from "../model/BaseModel";
 import { NetworkPlayer } from "../model/Network";
 import { randomBoard, VisualPlayer, VisualState } from "../model/VisualModel";
+import DrawerContent from "./DrawerContent.vue";
 import GameDisplay from "./GameDisplay.vue";
 import { gameSetupStore, PlayerType } from "./GameSetupStore";
-import DrawerContent from "./DrawerContent.vue";
-import { Fragment } from "vue";
 
 const backendUrl = import.meta.env.PUBLIC_BACKEND_URL;
 
@@ -116,7 +111,7 @@ if (!backendUrl) {
 }
 
 export default {
-  components: { GameDisplay, InformationCircleIcon, WrenchIcon, DrawerContent },
+  components: { GameDisplay, PencilRuler, Info, DrawerContent },
   emits: {},
   data() {
     return {

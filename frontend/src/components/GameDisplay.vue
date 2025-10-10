@@ -10,18 +10,18 @@
 import PaperCanvasFull from "./PaperCanvasFull.vue";
 
 import paper from "paper";
-import { Game } from "../model/BaseModel";
+import { Direction, Game } from "../model/BaseModel";
 import { getDaisyUIColors } from "../model/StyleUtils";
 import {
+  PaperBoard,
   pointTileQuadrant,
   tileQuadrantToSlice,
   VisualPlayer,
   VisualState,
   type BoardData,
-  type PaperBoard,
   type RedrawEvent,
 } from "../model/VisualModel";
-import { defineComponent } from "vue";
+import { defineComponent, h } from "vue";
 
 function centerLine(view: paper.View): paper.Path.Line {
   const width = view.size.width;
@@ -92,73 +92,234 @@ export default defineComponent({
     }
   },
   methods: {
-    setUpInteractiveTools() {
-      if (this.interactive) {
-        const startBoardDrag = (event: paper.MouseEvent) => {
-          const hitBoard = this.game.state.hitTestPaperBoard(event.point);
-          if (!hitBoard) return;
-          // Set the selected board UUID in the game state
-          this.game.state.selectedBoardUUID = hitBoard.uuid;
+    newDragTool() {
+      const startBoardDrag = (event: paper.MouseEvent) => {
+        const hitBoard = this.game.state.hitTestPaperBoard(event.point);
+        if (!hitBoard) return;
+        // Set the selected board UUID in the game state
+        this.game.state.selectedBoardUUID = hitBoard.uuid;
 
-          // Move the board to the mouse position
-          hitBoard.position = event.point;
-        };
-        const dragBoard = (event: paper.MouseEvent) => {
-          if (!this.game.state.selectedBoardUUID) return;
-          const board =
-            this.game.state.paperBoards[this.game.state.selectedBoardUUID!];
-          if (!board) return;
+        // Move the board to the mouse position
+        hitBoard.position = event.point;
+      };
+      const dragBoard = (event: paper.MouseEvent) => {
+        if (!this.game.state.selectedBoardUUID) return;
+        const board =
+          this.game.state.paperBoards[this.game.state.selectedBoardUUID!];
+        if (!board) return;
 
-          // Move the board to the mouse position
-          board.position = event.point;
-        };
-        const endBoardDrag = (event: paper.MouseEvent) => {
-          this.game.state.selectedBoardUUID = null;
-        };
+        // Move the board to the mouse position
+        board.position = event.point;
+      };
+      const endBoardDrag = (event: paper.MouseEvent) => {
+        this.game.state.selectedBoardUUID = null;
+      };
 
-        const dragTool = new paper.Tool();
-        dragTool.onMouseDown = startBoardDrag;
-        dragTool.onMouseDrag = dragBoard;
-        dragTool.onMouseUp = endBoardDrag;
+      const dragTool = new paper.Tool();
+      dragTool.onMouseDown = startBoardDrag;
+      dragTool.onMouseDrag = dragBoard;
+      dragTool.onMouseUp = endBoardDrag;
 
-        const sliceTool = new paper.Tool();
-        sliceTool.onMouseMove = (event: paper.MouseEvent) => {
-          // If the mouse is over a board, indicate where a slice will be made if you click
-          const hitBoard = this.game.state.hitTestPaperBoard(event.point);
-          if (hitBoard) {
-            const ptq = pointTileQuadrant(hitBoard, event.point);
-            if (ptq) {
-              const slice = tileQuadrantToSlice(ptq.tile, ptq.quadrant);
-              this.game.state.sliceIndicator = {
-                boardUUID: hitBoard.uuid,
-                direction: slice.direction,
-                index: slice.line,
-              };
-            } else {
-              this.game.state.sliceIndicator = null;
-            }
+      return dragTool;
+    },
+    newHoverSliceTool() {
+      // Slice by clicking directly on a grid line. Hovering will show a
+      // preview of the slice.
+      const sliceTool = new paper.Tool();
+      sliceTool.onMouseMove = (event: paper.MouseEvent) => {
+        // If the mouse is over a board, indicate where a slice will be made if you click
+        const hitBoard = this.game.state.hitTestPaperBoard(event.point);
+        if (hitBoard) {
+          const ptq = pointTileQuadrant(hitBoard, event.point);
+          if (ptq) {
+            const slice = tileQuadrantToSlice(ptq.tile, ptq.quadrant);
+            this.game.state.sliceIndicator = {
+              boardUUID: hitBoard.uuid,
+              direction: slice.direction,
+              index: slice.line,
+            };
           } else {
             this.game.state.sliceIndicator = null;
           }
+        } else {
+          this.game.state.sliceIndicator = null;
+        }
+      };
+      sliceTool.onMouseDown = (event: paper.MouseEvent) => {
+        // If the mouse is over a board, make a slice
+        const hitBoard = this.game.state.hitTestPaperBoard(
+          event.point
+        ) as PaperBoard;
+        if (!hitBoard) return;
+
+        const ptq = pointTileQuadrant(hitBoard, event.point);
+        if (!ptq) return;
+
+        const slice = tileQuadrantToSlice(ptq.tile, ptq.quadrant);
+
+        const board = this.game.state.boards[hitBoard.uuid];
+        if (!board) {
+          throw new Error("Board not found in state");
+        }
+        this.game.state.actionCallBack(slice, board);
+      };
+      return sliceTool;
+    },
+    newDragSliceTool() {
+      // Click and drag to create a straight line across the screen. The first
+      // board it passes through is sliced, along the closest grid line to the
+      // line.
+      // VisualState has a lineIndicator attribute for this.
+
+      const sliceDragTool = new paper.Tool();
+
+      sliceDragTool.onMouseDown = (event: paper.MouseEvent) => {
+        this.game.state.lineIndicator = {
+          start: event.point,
+          end: event.point,
         };
-        sliceTool.onMouseDown = (event: paper.MouseEvent) => {
-          // If the mouse is over a board, make a slice
-          const hitBoard = this.game.state.hitTestPaperBoard(
-            event.point
-          ) as PaperBoard;
-          if (!hitBoard) return;
+      };
 
-          const ptq = pointTileQuadrant(hitBoard, event.point);
-          if (!ptq) return;
+      sliceDragTool.onMouseDrag = (event: paper.MouseEvent) => {
+        if (!this.game.state.lineIndicator) return;
+        this.game.state.lineIndicator.end = event.point;
 
-          const slice = tileQuadrantToSlice(ptq.tile, ptq.quadrant);
+        // If the line passes through a board, highlight the closest grid line
+        // to the line by setting sliceIndicator
 
-          const board = this.game.state.boards[hitBoard.uuid];
-          if (!board) {
-            throw new Error("Board not found in state");
+        const line = new paper.Path.Line(
+          this.game.state.lineIndicator.start,
+          this.game.state.lineIndicator.end
+        );
+        const hitBoard = this.game.state.hitTestLinePaperBoard(line);
+        if (!hitBoard) {
+          this.game.state.sliceIndicator = null;
+          return;
+        }
+
+        // Is the line more horizontal or vertical?
+        const isHorizontal =
+          Math.abs(
+            this.game.state.lineIndicator.end.x -
+              this.game.state.lineIndicator.start.x
+          ) >=
+          Math.abs(
+            this.game.state.lineIndicator.end.y -
+              this.game.state.lineIndicator.start.y
+          );
+
+        const { height: tileHeight, width: tileWidth } =
+          PaperBoard.baseTileSize; // in pixels
+        const { height, width } = hitBoard.dimensions; // in tiles
+
+        if (isHorizontal && height < 2) {
+          // Cannot slice horizontally if there is only one row
+          this.game.state.sliceIndicator = null;
+          return;
+        }
+        if (!isHorizontal && width < 2) {
+          // Cannot slice vertically if there is only one column
+          this.game.state.sliceIndicator = null;
+          return;
+        }
+
+        // Want to find the beginning and end of the line segment that is
+        // inside the board bounds
+        const p1Contained = this.game.state.lineIndicator.start.isInside(
+          hitBoard.bounds
+        );
+        const p2Contained = this.game.state.lineIndicator.end.isInside(
+          hitBoard.bounds
+        );
+        let p1 = this.game.state.lineIndicator.start;
+        let p2 = this.game.state.lineIndicator.end;
+        if (!p1Contained && !p2Contained) {
+          // Neither point is contained, so we need to find the intersections
+          const intersections = line.getIntersections(
+            new paper.Path.Rectangle(hitBoard.bounds)
+          );
+          if (intersections.length < 2) {
+            this.game.state.sliceIndicator = null;
+            return;
           }
-          this.game.state.actionCallBack(slice, board);
-        };
+          p1 = intersections[0].point;
+          p2 = intersections[1].point;
+        } else if (!p1Contained) {
+          // Only p1 is outside, find intersection for p1
+          const intersections = line.getIntersections(
+            new paper.Path.Rectangle(hitBoard.bounds)
+          );
+          if (intersections.length < 1) {
+            this.game.state.sliceIndicator = null;
+            return;
+          }
+          p1 = intersections[0].point;
+        } else if (!p2Contained) {
+          // Only p2 is outside, find intersection for p2
+          const intersections = line.getIntersections(
+            new paper.Path.Rectangle(hitBoard.bounds)
+          );
+          if (intersections.length < 1) {
+            this.game.state.sliceIndicator = null;
+            return;
+          }
+          p2 = intersections[0].point;
+        }
+
+        if (isHorizontal) {
+          // Find the average y of p1 and p2
+          const avgY = (p1.y + p2.y) / 2;
+          // Find the closest horizontal grid line to avgY
+          const localY =
+            avgY - (hitBoard.position.y - (height * tileHeight) / 2); // in pixels
+          let index = Math.round(localY / tileHeight); // in tiles
+
+          this.game.state.sliceIndicator = {
+            boardUUID: hitBoard.uuid,
+            direction: Direction.Horizontal,
+            index,
+          };
+        } else {
+          // Find the average x of p1 and p2
+          const avgX = (p1.x + p2.x) / 2;
+          // Find the closest vertical grid line to avgX
+          const { height: tileHeight, width: tileWidth } =
+            PaperBoard.baseTileSize; // in pixels
+          const { height, width } = hitBoard.dimensions; // in tiles
+          const localX = avgX - (hitBoard.position.x - (width * tileWidth) / 2); // in pixels
+          let index = Math.round(localX / tileWidth); // in tiles
+
+          this.game.state.sliceIndicator = {
+            boardUUID: hitBoard.uuid,
+            direction: Direction.Vertical,
+            index,
+          };
+        }
+      };
+      sliceDragTool.onMouseUp = (event: paper.MouseEvent) => {
+        if (!this.game.state.lineIndicator) return;
+        if (!this.game.state.sliceIndicator) {
+          this.game.state.lineIndicator = null;
+          return;
+        }
+
+        const { boardUUID, direction, index } = this.game.state.sliceIndicator;
+        const board = this.game.state.boards[boardUUID];
+        if (!board) {
+          throw new Error("Board not found in state");
+        }
+        const slice = { direction, line: index };
+        this.game.state.actionCallBack(slice, board);
+        this.game.state.lineIndicator = null;
+        this.game.state.sliceIndicator = null;
+      };
+
+      return sliceDragTool;
+    },
+    setUpInteractiveTools() {
+      if (this.interactive) {
+        const dragTool = this.newDragTool();
+        const sliceTool = this.newDragSliceTool();
 
         const switchToSlice = (event: paper.KeyEvent) => {
           if (event.key === "shift") {
@@ -280,7 +441,8 @@ export default defineComponent({
         } else {
           // Update positions based on forces
           // Center point attraction
-          const centerPoint = new paper.Point(0, 0);
+          // const centerPoint = new paper.Point(0, 0);
+          const centerPoint = view.center;
           // Center line attraction
           //   const centerPoint = centerLine(view);
 
@@ -313,6 +475,20 @@ export default defineComponent({
                 overlayGroup.addChild(sliceMarker);
               }
             }
+          }
+          //   Add the line indicator if active
+          if (this.game.state.lineIndicator) {
+            const line = new paper.Path.Line(
+              this.game.state.lineIndicator.start,
+              this.game.state.lineIndicator.end
+            );
+            line.strokeColor = new paper.Color(infoColor);
+            line.strokeWidth = 5;
+
+            const dashArray = [20, 10];
+            line.dashArray = dashArray;
+
+            overlayGroup.addChild(line);
           }
         }
 
@@ -353,7 +529,7 @@ export default defineComponent({
 
         const vScaleFactor = view.size.width / allBounds.width;
         const hScaleFactor = view.size.height / allBounds.height;
-        const scaleFactor = Math.min(vScaleFactor, hScaleFactor) * 0.9; // Add some padding
+        const scaleFactor = Math.min(vScaleFactor, hScaleFactor) * 0.8; // Add some padding
 
         const targetZoom = project.view.zoom * scaleFactor;
         const diff = targetZoom - project.view.zoom;

@@ -65,7 +65,7 @@
                   </div>
                   <div class="shrink-0 flex flex-col gap-2 text-xs">
                     <span>Hold Shift to drag boards</span>
-                    <span>Click on grid lines to slice boards</span>
+                    <span>Click and drag to slice boards</span>
                     <span>Last player to take a turn wins</span>
                   </div>
                 </div>
@@ -143,7 +143,7 @@
             You will be able to select game rules here.</TabContent
           >
           <TabContent groupName="setupTabs" tabName="Boards">
-            You will be able to select board configurations (amount and
+            You will be able to select board configurations (dimensions and
             markings) here.
           </TabContent>
         </TabGroup>
@@ -152,7 +152,7 @@
           class="btn btn-primary btn-lg fixed bottom-0 right-0 m-8"
           @click="newGame"
         >
-          New Game
+          New Game <PlayIcon class="" />
         </button>
       </template>
     </DrawerContent>
@@ -160,7 +160,7 @@
 </template>
 <script lang="ts">
 import { useVModel } from "@nanostores/vue";
-import { Info, PencilRuler } from "lucide-vue-next";
+import { Info, PencilRuler, Play } from "lucide-vue-next";
 import { defineComponent } from "vue";
 import {
   actionToString,
@@ -191,6 +191,7 @@ export default defineComponent({
     GameDisplay,
     PencilRulerIcon: PencilRuler,
     InfoIcon: Info,
+    PlayIcon: Play,
     DrawerContent,
     TabGroup,
     TabContent,

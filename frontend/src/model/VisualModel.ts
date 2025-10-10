@@ -352,16 +352,17 @@ export class VisualState extends BaseState {
     direction: Direction;
     index: number;
   } = null; // Current slice being drawn, if any
+  lineIndicator: null | {
+    start: paper.Point;
+    end: paper.Point;
+  } = null; // Current line being drawn, if any. This is used by the sliceDragTool
+
   zoomLevel = 1; // Current zoom level of the view
 
   static repulsionStrength = 5000;
   static attractionStrength = 100;
   static timeScale = 1;
   static boardPadding = 50;
-
-  static markColor = new paper.Color("red");
-  static unmarkColor = new paper.Color("white");
-  static gridLineColor = new paper.Color("black");
 
   // Callback to be called after the user makes a slice action.
   actionCallBack: (slice: Slice, board: Board) => void;
@@ -500,6 +501,33 @@ export class VisualState extends BaseState {
       // Might be more efficient to use paper's built-in hitTest, but its
       // difficult to convert between points when zoomed/panned
       if (board.bounds.contains(point)) {
+        return board;
+      }
+    }
+    return null;
+  }
+
+  hitTestLinePaperBoard(line: paper.Path.Line): PaperBoard | null {
+    // If the start point is on top of a board, return that board
+    const startBoard = this.hitTestPaperBoard(line.getPointAt(0)!);
+    if (startBoard) return startBoard;
+    // Otherwise, check if the line intersects any boards and return the first
+    // one it hits
+    const boards = Object.values(this.paperBoards);
+    boards.sort((a, b) => {
+      const distA = a.position.getDistance(line.getPointAt(0)!);
+      const distB = b.position.getDistance(line.getPointAt(0)!);
+      return distA - distB;
+    });
+    for (const board of boards) {
+      // Check if the line intersects the board bounds. Will return the first
+      // board hit.
+      const boardRectPath = new paper.Path.Rectangle(board.bounds);
+      if (
+        line.intersects(boardRectPath) ||
+        boardRectPath.contains(line.getPointAt(0)!) ||
+        boardRectPath.contains(line.getPointAt(line.length)!)
+      ) {
         return board;
       }
     }

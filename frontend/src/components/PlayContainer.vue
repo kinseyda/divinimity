@@ -1,97 +1,169 @@
 <template>
-  <DrawerContent
-    drawerId="game-setup-drawer"
-    drawerTitle="Game Setup"
-    :drawerLeft="true"
-  >
-    <template #fabIcon>
-      <PencilRuler class="size-8" />
-    </template>
-    <template #content>
-      <DrawerContent
-        drawerId="game-info-drawer"
-        drawerTitle="Current Game Info"
-        :drawerLeft="false"
-        v-if="game"
-      >
-        <template #fabIcon>
-          <Info class="size-8" />
-        </template>
-        <template #content>
-          <GameDisplay :interactive="true" :game="game" />
-        </template>
-        <template #drawerContent>
-          <div>Info goes here TODO</div>
-          <div class="flex flex-col gap-2 text-xs fixed bottom-0 left-0 m-8">
-            <span>Hold Shift to drag boards</span>
-            <span>Click on grid lines to slice boards</span>
-            <span>Last player to take a turn wins</span>
-          </div>
-        </template>
-      </DrawerContent>
-    </template>
-    <template #drawerContent>
-      <fieldset class="fieldset">
-        <legend class="fieldset-legend">Second Player</legend>
-        <select class="select" v-model="secondPlayerType">
-          <option :value="PlayerType.Random">Random Player</option>
-          <option :value="PlayerType.NetworkInitiator">
-            Network (Host new game)
-          </option>
-          <option :value="PlayerType.NetworkResponder">
-            Network (Join a game)
-          </option>
-        </select>
-      </fieldset>
-      <fieldset class="fieldset" v-if="secondPlayerType === PlayerType.Random">
-        <legend class="fieldset-legend">Random Player Delay</legend>
-        <input
-          type="range"
-          class="range range-primary"
-          min="0"
-          max="1000"
-          step="100"
-          v-model="randomPlayerDelay"
-        />
-        <div class="flex justify-between px-2.5 mt-2 text-xs">
-          <span>0 ms</span>
-          <span>1000 ms</span>
-        </div>
-      </fieldset>
+  <div class="size-full">
+    <DrawerContent
+      drawerId="game-setup-drawer"
+      drawerTitle="Game Setup"
+      :drawerLeft="true"
+    >
+      <template #fabIcon>
+        <PencilRulerIcon class="size-8" />
+      </template>
+      <template #content>
+        <DrawerContent
+          drawerId="game-info-drawer"
+          drawerTitle="Current Game"
+          :drawerLeft="false"
+          v-if="game"
+        >
+          <template #fabIcon>
+            <InfoIcon class="size-8" />
+          </template>
+          <template #content>
+            <div class="size-full relative">
+              <GameDisplay
+                :interactive="true"
+                :game="game"
+                class="size-full absolute inset-0"
+              />
+              <TurnIndicator
+                class="alert absolute left-1/2 -translate-x-1/2 mt-4 pointer-events-none"
+                :playerState="getPlayerState()"
+              />
+            </div>
+          </template>
+          <template #drawerContent>
+            <TabGroup>
+              <TabContent groupName="infoTabs" :isActive="true" tabName="Turns">
+                <div class="flex flex-col gap-4 size-full">
+                  <div class="flex-grow overflow-auto relative">
+                    <!-- Using relative and absolute here to make the table
+                    scroll without affecting the layout -->
+                    <table
+                      class="table table-pin-rows table-xs w-full max-h-full overflow-scroll absolute inset-0"
+                    >
+                      <thead>
+                        <tr>
+                          <th>Turn</th>
+                          <th>Player</th>
+                          <th>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr
+                          v-for="(entry, index) in game?.state.turnHistory"
+                          :key="index"
+                        >
+                          <td>{{ index + 1 }}</td>
+                          <td>{{ entry.player.name }}</td>
+                          <td>{{ actionToString(entry.action) }}</td>
+                        </tr>
+                        <tr>
+                          <td></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="shrink-0 flex flex-col gap-2 text-xs">
+                    <span>Hold Shift to drag boards</span>
+                    <span>Click on grid lines to slice boards</span>
+                    <span>Last player to take a turn wins</span>
+                  </div>
+                </div>
+              </TabContent>
+              <TabContent groupName="infoTabs" tabName="Info">
+                You will be able to see statistics about the current game and
+                the players here.
+              </TabContent>
+              <TabContent groupName="infoTabs" tabName="Analysis">
+                You will be able to see analysis of the current game here.
+              </TabContent>
+            </TabGroup>
+          </template>
+        </DrawerContent>
+      </template>
+      <template #drawerContent>
+        <TabGroup>
+          <TabContent groupName="setupTabs" :isActive="true" tabName="Players">
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend">Second Player</legend>
+              <select class="select" v-model="secondPlayerType">
+                <option :value="PlayerType.Random">Random Player</option>
+                <option :value="PlayerType.NetworkInitiator">
+                  Network (Host new game)
+                </option>
+                <option :value="PlayerType.NetworkResponder">
+                  Network (Join a game)
+                </option>
+              </select>
+            </fieldset>
+            <fieldset
+              class="fieldset"
+              v-if="secondPlayerType === PlayerType.Random"
+            >
+              <legend class="fieldset-legend">Random Player Delay</legend>
+              <input
+                type="range"
+                class="range range-primary"
+                min="0"
+                max="1000"
+                step="100"
+                v-model="randomPlayerDelay"
+              />
+              <div class="flex justify-between px-2.5 mt-2 text-xs">
+                <span>0 ms</span>
+                <span>1000 ms</span>
+              </div>
+            </fieldset>
+            <fieldset
+              class="fieldset"
+              v-else-if="secondPlayerType === PlayerType.NetworkResponder"
+            >
+              <div>Not yet implemented</div>
+              <button
+                class="btn btn-secondary mt-2"
+                @click="pingMultiplayerServer"
+              >
+                Ping Multiplayer Server
+              </button>
+            </fieldset>
+            <fieldset
+              class="fieldset"
+              v-else-if="secondPlayerType === PlayerType.NetworkInitiator"
+            >
+              <div>Not yet implemented</div>
+              <button
+                class="btn btn-secondary mt-2"
+                @click="pingMultiplayerServer"
+              >
+                Ping Multiplayer Server
+              </button>
+            </fieldset>
+          </TabContent>
+          <TabContent groupName="setupTabs" tabName="Rules">
+            You will be able to select game rules here.</TabContent
+          >
+          <TabContent groupName="setupTabs" tabName="Boards">
+            You will be able to select board configurations (amount and
+            markings) here.
+          </TabContent>
+        </TabGroup>
 
-      <label
-        class="label validator"
-        v-if="secondPlayerType === PlayerType.NetworkResponder"
-      >
-        <input
-          type="text"
-          required
-          class="input input-bordered w-full"
-          placeholder="Game ID"
-          pattern="[a-z]{6}"
-          minlength="6"
-          maxlength="6"
-          title="6 lowercase letters"
-        />
-      </label>
-      <p class="validator-hint">Enter a valid game ID</p>
-      <button class="btn btn-secondary mt-2" @click="pingMultiplayerServer">
-        Ping Multiplayer Server
-      </button>
-
-      <button
-        class="btn btn-primary btn-lg fixed bottom-0 right-0 m-8"
-        @click="newGame"
-      >
-        New Game
-      </button>
-    </template>
-  </DrawerContent>
+        <button
+          class="btn btn-primary btn-lg fixed bottom-0 right-0 m-8"
+          @click="newGame"
+        >
+          New Game
+        </button>
+      </template>
+    </DrawerContent>
+  </div>
 </template>
 <script lang="ts">
-import { PencilRuler, Info, Pencil } from "lucide-vue-next";
 import { useVModel } from "@nanostores/vue";
+import { Info, PencilRuler } from "lucide-vue-next";
+import { defineComponent } from "vue";
 import {
+  actionToString,
   Game,
   RandomPlayer,
   type Action,
@@ -103,6 +175,10 @@ import { randomBoard, VisualPlayer, VisualState } from "../model/VisualModel";
 import DrawerContent from "./DrawerContent.vue";
 import GameDisplay from "./GameDisplay.vue";
 import { gameSetupStore, PlayerType } from "./GameSetupStore";
+import TabContent from "./TabContent.vue";
+import TabGroup from "./TabGroup.vue";
+import TurnIndicator, { PlayerState } from "./TurnIndicator.vue";
+import { generateLoremIpsum } from "../model/StyleUtils";
 
 const backendUrl = import.meta.env.PUBLIC_BACKEND_URL;
 
@@ -110,8 +186,16 @@ if (!backendUrl) {
   throw new Error("PUBLIC_BACKEND_URL is not set");
 }
 
-export default {
-  components: { GameDisplay, PencilRuler, Info, DrawerContent },
+export default defineComponent({
+  components: {
+    GameDisplay,
+    PencilRulerIcon: PencilRuler,
+    InfoIcon: Info,
+    DrawerContent,
+    TabGroup,
+    TabContent,
+    TurnIndicator,
+  },
   emits: {},
   data() {
     return {
@@ -128,6 +212,43 @@ export default {
     this.newGame();
   },
   methods: {
+    generateLoremIpsum(words: number): string {
+      return generateLoremIpsum(words);
+    },
+    getVisualPlayer(): VisualPlayer | null {
+      if (!this.game) return null;
+      const players = this.game.players.filter(
+        (p) => p instanceof VisualPlayer
+      ) as VisualPlayer[];
+      if (players.length === 0) return null;
+      return players[0];
+    },
+    isWinnerVisualPlayer(): boolean {
+      if (!this.game) return false;
+      const winnerInfos = this.game.winners;
+      if (winnerInfos.length === 0) return false;
+      return winnerInfos.includes(this.getVisualPlayer()?.info!);
+    },
+    getPlayerState(): PlayerState {
+      if (!this.game) return PlayerState.GameNotStarted;
+      if (this.game.winners.length > 0) {
+        if (this.isWinnerVisualPlayer()) {
+          return PlayerState.YouWin;
+        } else if (this.game.winners.length === this.game.players.length) {
+          return PlayerState.YouDraw;
+        } else {
+          return PlayerState.YouLose;
+        }
+      }
+      if (this.game.currentPlayer() === this.getVisualPlayer()) {
+        return PlayerState.YourTurn;
+      } else {
+        return PlayerState.WaitingForOpponent;
+      }
+    },
+    actionToString(action: Action): string {
+      return actionToString(action);
+    },
     pingMultiplayerServer() {
       console.log("Pinging multiplayer server at", `${backendUrl}/ping`);
 
@@ -208,7 +329,7 @@ export default {
       this.game.playLoop();
     },
   },
-};
+});
 </script>
 
 <style scoped></style>

@@ -5,9 +5,9 @@ import LayoutBase from "./LayoutBase.astro";
 ---
 
 <LayoutBase>
-  <div class="w-screen h-screen absolute flex flex-col">
+  <div class="w-screen h-screen max-w-screen max-h-screen flex flex-col">
     <Navbar />
-    <div class="flex-grow relative">
+    <div class="flex-grow overflow-hidden">
       <slot name="content" />
     </div>
   </div>

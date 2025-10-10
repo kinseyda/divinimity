@@ -1,7 +1,8 @@
 <script lang="ts">
 import { X, ChevronLeft, ChevronRight } from "lucide-vue-next";
+import { defineComponent } from "vue";
 
-export default {
+export default defineComponent({
   components: {
     XMarkIcon: X,
     ChevronLeftIcon: ChevronLeft,
@@ -30,7 +31,7 @@ export default {
   setup() {
     return {};
   },
-};
+});
 </script>
 <template>
   <div
@@ -38,7 +39,7 @@ export default {
     :class="drawerLeft ? '' : 'drawer-end'"
   >
     <input :id="drawerId" type="checkbox" class="drawer-toggle" />
-    <div class="drawer-content size-full">
+    <div class="drawer-content">
       <!-- Content beside the drawer goes here -->
       <div class="size-full">
         <label
@@ -48,21 +49,21 @@ export default {
         >
           <slot name="fabIcon" />
         </label>
-        <div class="size-full relative">
+        <div class="size-full">
           <slot name="content" />
         </div>
       </div>
     </div>
     <div class="drawer-side size-full">
-      <!-- using size-full here because the daisyUi drawer-side class sets the
-      height to 100vh -->
+      <!-- using size-full here overrides the daisyUi drawer-side class which
+      sets the height to 100vh -->
       <label :for="drawerId" class="drawer-overlay"></label>
       <div
-        class="bg-base-200 z-50 w-xs p-4 gap-4 h-full flex flex-col"
+        class="bg-base-200 z-50 w-xs p-4 size-full flex flex-col"
         :class="{ 'left-0': drawerLeft, 'right-0': !drawerLeft }"
       >
         <!-- Drawers on the right don't work without setting them to fixed positioning -->
-        <span
+        <div
           :class="{ 'flex-row-reverse': !drawerLeft }"
           class="flex justify-between items-center lg:flex-row"
         >
@@ -74,10 +75,8 @@ export default {
             <ChevronLeftIcon v-if="drawerLeft" />
             <ChevronRightIcon v-else />
           </label>
-        </span>
-        <div class="size-full">
-          <slot name="drawerContent" />
         </div>
+        <slot name="drawerContent" class="flex-grow" />
       </div>
     </div>
   </div>

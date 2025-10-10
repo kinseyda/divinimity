@@ -2,8 +2,9 @@
 import { useStore } from "@nanostores/vue";
 import { debugStore } from "./DebugStore";
 import { X } from "lucide-vue-next";
+import { defineComponent } from "vue";
 
-export default {
+export default defineComponent({
   components: {
     XMarkIcon: X,
   },
@@ -28,7 +29,7 @@ export default {
       debugOptions: $debugOptions,
     };
   },
-};
+});
 </script>
 <template>
   <div data-allow-mismatch="children">

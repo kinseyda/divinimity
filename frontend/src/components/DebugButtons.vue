@@ -15,8 +15,9 @@
 <script lang="ts">
 import { useVModel } from "@nanostores/vue";
 import { debugStore } from "./DebugStore";
+import { defineComponent } from "vue";
 
-export default {
+export default defineComponent({
   components: {},
   emits: {},
   data() {
@@ -28,7 +29,7 @@ export default {
       isDebugMode: isDebugMode,
     };
   },
-};
+});
 </script>
 
 <style scoped></style>

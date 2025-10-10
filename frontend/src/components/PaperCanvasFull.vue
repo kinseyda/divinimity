@@ -5,8 +5,9 @@
 <script lang="ts">
 import paper from "paper";
 import type { RedrawEvent } from "../model/VisualModel";
+import { defineComponent } from "vue";
 
-export default {
+export default defineComponent({
   data() {
     return {};
   },
@@ -43,7 +44,7 @@ export default {
       this.updateDrawing(event, paper.project, paper.view);
     };
   },
-};
+});
 </script>
 
 <style scoped>

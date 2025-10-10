@@ -1,10 +1,11 @@
 <script lang="ts">
+import { defineComponent } from "vue";
 import { Game, RandomPlayer } from "../model/BaseModel";
 import { randomBoard, VisualState } from "../model/VisualModel";
 import "../styles/global.css";
 import GameDisplay from "./GameDisplay.vue";
 
-export default {
+export default defineComponent({
   components: {
     GameDisplay,
   },
@@ -38,11 +39,11 @@ export default {
   mounted() {
     this.newGame();
   },
-};
+});
 </script>
 
 <template>
-  <div v-if="game">
+  <div v-if="game" class="size-full">
     <GameDisplay :game="game!" />
   </div>
 </template>

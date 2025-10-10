@@ -10,17 +10,10 @@
 import PaperCanvasFull from "./PaperCanvasFull.vue";
 
 import paper from "paper";
-import {
-  actionToString,
-  Game,
-  RandomPlayer,
-  type Action,
-  type Board,
-  type Slice,
-} from "../model/BaseModel";
+import { Game } from "../model/BaseModel";
+import { getDaisyUIColors } from "../model/StyleUtils";
 import {
   pointTileQuadrant,
-  randomBoard,
   tileQuadrantToSlice,
   VisualPlayer,
   VisualState,
@@ -28,7 +21,7 @@ import {
   type PaperBoard,
   type RedrawEvent,
 } from "../model/VisualModel";
-import { getDaisyUIColors } from "../model/StyleUtils";
+import { defineComponent } from "vue";
 
 function centerLine(view: paper.View): paper.Path.Line {
   const width = view.size.width;
@@ -68,7 +61,7 @@ function placeAroundCenter(
   return positions;
 }
 
-export default {
+export default defineComponent({
   components: {
     PaperCanvasFull,
   },
@@ -195,17 +188,7 @@ export default {
         this.dragTool = emptyTool;
       }
     },
-    actionToString(action: Action): string {
-      return actionToString(action);
-    },
-    getVisualPlayer(): VisualPlayer | null {
-      if (!this.game) return null;
-      const players = this.game.players.filter(
-        (p) => p instanceof VisualPlayer
-      ) as VisualPlayer[];
-      if (players.length === 0) return null;
-      return players[0];
-    },
+
     winnerString(): string {
       if (!this.game) return "";
       const winnerInfos = this.game.winners;
@@ -217,6 +200,14 @@ export default {
         return `Winner: ${winnerInfos[0].name}`;
       }
       return `Winners: ${winnerInfos.map((p) => p.name).join(", ")}`;
+    },
+    getVisualPlayer(): VisualPlayer | null {
+      if (!this.game) return null;
+      const players = this.game.players.filter(
+        (p) => p instanceof VisualPlayer
+      ) as VisualPlayer[];
+      if (players.length === 0) return null;
+      return players[0];
     },
     isWinnerVisualPlayer(): boolean {
       if (!this.game) return false;
@@ -399,46 +390,10 @@ export default {
       overlayGroup.bringToFront();
     },
   },
-};
+});
 </script>
 <template>
-  <div v-if="interactive" class="">
-    <div class="fixed m-4 flex gap-4 right-0 flex-col items-end z-1">
-      <details
-        class="collapse collapse-arrow bg-base-100 border-base-300 border"
-      >
-        <summary class="collapse-title font-semibold">
-          <span v-if="!game?.winners.length"
-            >{{ game?.currentPlayer()?.info.name }}'s Turn</span
-          >
-          <span v-else>Game Over</span>
-        </summary>
-        <div class="collapse-content max-h-96 overflow-y-auto">
-          <table class="table table-xs w-3xs bg-base-200">
-            <thead>
-              <tr>
-                <th>Turn</th>
-                <th>Player</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="(entry, index) in game?.state.turnHistory"
-                :key="index"
-              >
-                <td>{{ index + 1 }}</td>
-                <td>{{ entry.player.name }}</td>
-                <td>{{ actionToString(entry.action) }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </details>
-    </div>
-  </div>
-
-  <PaperCanvasFull :redrawFunction="redrawFunc" class="absolute inset-0" />
+  <PaperCanvasFull :redrawFunction="redrawFunc" class="size-full" />
 </template>
 <style scoped>
 canvas[resize] {

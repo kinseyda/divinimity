@@ -43,3 +43,31 @@ export function getDaisyUIColors(): DaisyUIColors {
     neutral: getDaisyUIColor("--color-neutral"),
   };
 }
+
+export function generateLoremIpsum(wordCount: number): string {
+  const words = [
+    "lorem",
+    "ipsum",
+    "dolor",
+    "sit",
+    "amet",
+    "consectetur",
+    "adipiscing",
+    "elit",
+    "sed",
+    "do",
+    "eiusmod",
+    "tempor",
+    "incididunt",
+    "ut",
+    "labore",
+    "et",
+    "dolore",
+    "magna",
+  ];
+  let result = [];
+  for (let i = 0; i < wordCount; i++) {
+    result.push(words[Math.floor(Math.random() * words.length)]);
+  }
+  return result.join(" ");
+}

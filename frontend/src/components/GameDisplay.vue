@@ -9,7 +9,9 @@
 
 import PaperCanvasFull from "./PaperCanvasFull.vue";
 
+import { MoveIcon } from "lucide-vue-next";
 import paper from "paper";
+import { defineComponent } from "vue";
 import { Direction, Game } from "../model/BaseModel";
 import { getDaisyUIColors } from "../model/StyleUtils";
 import {
@@ -21,26 +23,7 @@ import {
   type BoardData,
   type RedrawEvent,
 } from "../model/VisualModel";
-import { defineComponent, h } from "vue";
-
-function centerLine(view: paper.View): paper.Path.Line {
-  const width = view.size.width;
-  const height = view.size.height;
-
-  if (height > width) {
-    const verticalPad = width / 2;
-    return new paper.Path.Line({
-      from: new paper.Point(view.center.x, verticalPad),
-      to: new paper.Point(view.center.x, height - verticalPad),
-    });
-  } else {
-    const horizontalPad = height / 2;
-    return new paper.Path.Line({
-      from: new paper.Point(horizontalPad, view.center.y),
-      to: new paper.Point(width - horizontalPad, view.center.y),
-    });
-  }
-}
+import TurnIndicator, { PlayerState } from "./TurnIndicator.vue";
 
 function placeAroundCenter(
   boards: PaperBoard[],
@@ -61,14 +44,23 @@ function placeAroundCenter(
   return positions;
 }
 
+enum ToolType {
+  Slice,
+  Drag,
+}
+
 export default defineComponent({
   components: {
     PaperCanvasFull,
+    TurnIndicator,
+    MoveIcon,
   },
   data() {
     return {
       sliceTool: null as paper.Tool | null,
       dragTool: null as paper.Tool | null,
+      curTool: ToolType.Slice as ToolType,
+      ToolType,
     };
   },
   props: {
@@ -316,6 +308,28 @@ export default defineComponent({
 
       return sliceDragTool;
     },
+    switchToSliceTool() {
+      if (this.sliceTool) {
+        this.game.state.selectedBoardUUID = null;
+        this.curTool = ToolType.Slice;
+        this.sliceTool.activate();
+      }
+    },
+    switchToDragTool() {
+      if (this.dragTool) {
+        this.game.state.sliceIndicator = null;
+        this.game.state.lineIndicator = null;
+        this.curTool = ToolType.Drag;
+        this.dragTool.activate();
+      }
+    },
+    toggleTool() {
+      if (this.curTool === ToolType.Drag) {
+        this.switchToSliceTool();
+      } else {
+        this.switchToDragTool();
+      }
+    },
     setUpInteractiveTools() {
       if (this.interactive) {
         const dragTool = this.newDragTool();
@@ -324,15 +338,13 @@ export default defineComponent({
         const switchToSlice = (event: paper.KeyEvent) => {
           if (event.key === "shift") {
             // If shift is released, stop dragging
-            this.game.state.selectedBoardUUID = null;
-            sliceTool.activate();
+            this.switchToSliceTool();
           }
         };
         const switchToDrag = (event: paper.KeyEvent) => {
           if (event.key === "shift") {
             // If shift is pressed, start dragging
-            this.game.state.sliceIndicator = null;
-            dragTool.activate();
+            this.switchToDragTool();
           }
         };
         dragTool.onKeyUp = switchToSlice;
@@ -380,6 +392,23 @@ export default defineComponent({
       if (!this.game) return;
       this.game.state.shuffleBoards(paper.view.size);
     },
+    getPlayerState(): PlayerState {
+      if (!this.game) return PlayerState.GameNotStarted;
+      if (this.game.winners.length > 0) {
+        if (this.isWinnerVisualPlayer()) {
+          return PlayerState.YouWin;
+        } else if (this.game.winners.length === this.game.players.length) {
+          return PlayerState.YouDraw;
+        } else {
+          return PlayerState.YouLose;
+        }
+      }
+      if (this.game.currentPlayer() === this.getVisualPlayer()) {
+        return PlayerState.YourTurn;
+      } else {
+        return PlayerState.WaitingForOpponent;
+      }
+    },
     redrawFunc(event: RedrawEvent, project: paper.Project, view: paper.View) {
       if (!this.game) return;
 
@@ -403,6 +432,7 @@ export default defineComponent({
       const underlayGroup = new paper.Group();
       let zoomToFit = false;
       let axisLine = false;
+      let showCenters = false;
 
       if (paperBoards.length === 0) {
         // The game is over, display the winner(s)
@@ -441,8 +471,8 @@ export default defineComponent({
         } else {
           // Update positions based on forces
           // Center point attraction
-          // const centerPoint = new paper.Point(0, 0);
-          const centerPoint = view.center;
+          const centerPoint = new paper.Point(0, 0);
+          //   const centerPoint = view.center;
           // Center line attraction
           //   const centerPoint = centerLine(view);
 
@@ -490,6 +520,21 @@ export default defineComponent({
 
             overlayGroup.addChild(line);
           }
+          // If a board is being dragged, add an outline indicator
+          if (
+            this.game.state.selectedBoardUUID &&
+            this.game.state.selectedBoardUUID === board.uuid
+          ) {
+            const outline = this.game.state.renderOutlineIndicator(
+              board.uuid,
+              new paper.Color(infoColor),
+              10,
+              [20, 10]
+            );
+            if (outline) {
+              overlayGroup.addChild(outline);
+            }
+          }
         }
 
         zoomToFit = !this.game.state.selectedBoardUUID;
@@ -514,8 +559,8 @@ export default defineComponent({
 
         // Zooming and panning should be smooth, so we only move part of the way
         // to the target zoom level per second
-        const panSpeed = 3;
-        const zoomSpeed = 3;
+        const panSpeed = 1;
+        const zoomSpeed = 1;
         const timeDelta = event.delta; // Time since last frame in seconds
 
         // Translate view to center
@@ -561,6 +606,23 @@ export default defineComponent({
         underlayGroup.strokeColor = new paper.Color(base300Color);
         underlayGroup.strokeWidth = 5;
       }
+      if (showCenters) {
+        // Show center points of screen (the attraction points) and the center
+        // of the project bounds, for debugging the panning/zooming behaviour
+        const centerPoint = new paper.Path.Circle({
+          center: project.view.center,
+          radius: 10,
+        });
+        centerPoint.fillColor = new paper.Color(infoColor);
+        overlayGroup.addChild(centerPoint);
+
+        const projectCenter = new paper.Path.Circle({
+          center: project.activeLayer.bounds.center,
+          radius: 10,
+        });
+        projectCenter.fillColor = new paper.Color(infoColor);
+        overlayGroup.addChild(projectCenter);
+      }
 
       underlayGroup.sendToBack();
       overlayGroup.bringToFront();
@@ -570,10 +632,22 @@ export default defineComponent({
 </script>
 <template>
   <PaperCanvasFull :redrawFunction="redrawFunc" class="size-full" />
+  <div v-if="interactive">
+    <div class="absolute right-4 top-4">
+      <span
+        class="btn btn-lg btn-primary btn-circle"
+        :class="{
+          'btn-active border-4 border-info': curTool === ToolType.Drag,
+        }"
+        @click="toggleTool"
+      >
+        <MoveIcon class="size-6" />
+      </span>
+    </div>
+    <TurnIndicator
+      class="alert absolute left-1/2 -translate-x-1/2 top-4 pointer-events-none"
+      :playerState="getPlayerState()"
+    />
+  </div>
 </template>
-<style scoped>
-canvas[resize] {
-  width: 100%;
-  height: 100%;
-}
-</style>
+<style scoped></style>

@@ -47,7 +47,12 @@ The project uses Docker for development and production.
 - Switch to yup or some other schema validator for forms(?)
 - More game setup options (boards, rulesets)
 - Online multiplayer
-- Mobile friendly slice tool
+- Optimize the render function. There is a slight hitch whenever the garbage
+  collector kicks in. I suspect its due to the way I create new Paper.js groups
+  every frame. The amount of tiles and boards is limited, so this doesn't seem
+  to affect framerate, however it would be better to reuse objects between
+  frames where no turns have happened instead of creating new ones.
 - Implement AI players, time limited minimax algorithm
 - Scored divinim
 - Animations for slicing and removed boards disappearing
+- Mobile app with capacitor (not sure how difficult this is)

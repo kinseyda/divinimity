@@ -20,15 +20,7 @@
           </template>
           <template #content>
             <div class="size-full relative">
-              <GameDisplay
-                :interactive="true"
-                :game="game"
-                class="size-full absolute inset-0"
-              />
-              <TurnIndicator
-                class="alert absolute left-1/2 -translate-x-1/2 mt-4 pointer-events-none"
-                :playerState="getPlayerState()"
-              />
+              <GameDisplay :interactive="true" :game="game" />
             </div>
           </template>
           <template #drawerContent>
@@ -64,9 +56,13 @@
                     </table>
                   </div>
                   <div class="shrink-0 flex flex-col gap-2 text-xs">
-                    <span>Hold Shift to drag boards</span>
-                    <span>Click and drag to slice boards</span>
+                    <span>Slice boards by clicking and dragging</span>
                     <span>Last player to take a turn wins</span>
+                    <span>
+                      Rearrange boards by holding
+                      <kbd class="kbd kbd-xs">Shift</kbd> or using the on-screen
+                      toggle button, then clicking and dragging boards
+                    </span>
                   </div>
                 </div>
               </TabContent>
@@ -160,7 +156,7 @@
 </template>
 <script lang="ts">
 import { useVModel } from "@nanostores/vue";
-import { Info, PencilRuler, Play } from "lucide-vue-next";
+import { InfoIcon, MoveIcon, PencilRulerIcon, PlayIcon } from "lucide-vue-next";
 import { defineComponent } from "vue";
 import {
   actionToString,
@@ -171,6 +167,7 @@ import {
   type Slice,
 } from "../model/BaseModel";
 import { NetworkPlayer } from "../model/Network";
+import { generateLoremIpsum } from "../model/StyleUtils";
 import { randomBoard, VisualPlayer, VisualState } from "../model/VisualModel";
 import DrawerContent from "./DrawerContent.vue";
 import GameDisplay from "./GameDisplay.vue";
@@ -178,7 +175,6 @@ import { gameSetupStore, PlayerType } from "./GameSetupStore";
 import TabContent from "./TabContent.vue";
 import TabGroup from "./TabGroup.vue";
 import TurnIndicator, { PlayerState } from "./TurnIndicator.vue";
-import { generateLoremIpsum } from "../model/StyleUtils";
 
 const backendUrl = import.meta.env.PUBLIC_BACKEND_URL;
 
@@ -188,10 +184,10 @@ if (!backendUrl) {
 
 export default defineComponent({
   components: {
+    PencilRulerIcon,
+    InfoIcon,
+    PlayIcon,
     GameDisplay,
-    PencilRulerIcon: PencilRuler,
-    InfoIcon: Info,
-    PlayIcon: Play,
     DrawerContent,
     TabGroup,
     TabContent,
@@ -229,23 +225,6 @@ export default defineComponent({
       const winnerInfos = this.game.winners;
       if (winnerInfos.length === 0) return false;
       return winnerInfos.includes(this.getVisualPlayer()?.info!);
-    },
-    getPlayerState(): PlayerState {
-      if (!this.game) return PlayerState.GameNotStarted;
-      if (this.game.winners.length > 0) {
-        if (this.isWinnerVisualPlayer()) {
-          return PlayerState.YouWin;
-        } else if (this.game.winners.length === this.game.players.length) {
-          return PlayerState.YouDraw;
-        } else {
-          return PlayerState.YouLose;
-        }
-      }
-      if (this.game.currentPlayer() === this.getVisualPlayer()) {
-        return PlayerState.YourTurn;
-      } else {
-        return PlayerState.WaitingForOpponent;
-      }
     },
     actionToString(action: Action): string {
       return actionToString(action);

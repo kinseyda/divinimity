@@ -43,6 +43,14 @@ export default defineComponent({
       // Call the redraw function with the event, project, and view
       this.updateDrawing(event, paper.project, paper.view);
     };
+
+    window.addEventListener("resize", () => {
+      paper.view.viewSize = new paper.Size(
+        (this.$refs.paperCanvas as HTMLCanvasElement).clientWidth,
+        (this.$refs.paperCanvas as HTMLCanvasElement).clientHeight
+      );
+      paper.view.update();
+    });
   },
 });
 </script>

@@ -151,6 +151,7 @@ export class PaperBoard {
 
   static baseTileSize = { width: 100, height: 100 }; // Pixel size of each tile
   static tilePadding = 5; // Padding between tiles
+  static cornerRadius = new paper.Size(25, 25); // Corner radius for rounded rectangles
 
   /**
    *
@@ -243,7 +244,7 @@ export class PaperBoard {
     }
 
     // Mask to round corners
-    const mask = new paper.Path.Rectangle(boardRect, new paper.Size(25, 25));
+    const mask = new paper.Path.Rectangle(boardRect, PaperBoard.cornerRadius);
     mask.strokeColor = colorOutline;
     mask.strokeWidth = 16;
     group.addChild(mask); // Used for showing the border on top of everything
@@ -392,13 +393,28 @@ export class VisualState extends BaseState {
     }
   }
 
+  /**
+   * Renders a slice indicator line on the specified board. The line is drawn in
+   * the given orientation (horizontal or vertical) at the specified index,
+   * where indexes are grid lines between tiles. The line extends slightly
+   * beyond the board edges for increased visibility. The line has rounded ends.
+   * @param boardUUID - UUID of the board to render the indicator on
+   * @param direction - Direction of the slice (horizontal or vertical)
+   * @param index - Index of the slice
+   * @param color - Color of the slice indicator line
+   * @param strokeWidth - Width of the slice indicator line
+   * @param overDrawPadding - Padding to apply when drawing the line beyond the
+   * board edges
+   * @returns A Paper.js Group containing the slice indicator line, or null if
+   * the board UUID is invalid or the index is out of bounds
+   */
   public renderSliceIndicator(
     boardUUID: string,
     direction: Direction,
     index: number,
     color: paper.Color,
     strokeWidth: number,
-    overDrawPadding = 20
+    overDrawPadding = 25
   ): paper.Group | null {
     const board = this.paperBoards[boardUUID];
     if (!board) return null;
@@ -466,6 +482,51 @@ export class VisualState extends BaseState {
   }
 
   /**
+   * Renders an outline indicator around the specified board. The outline is
+   * drawn on top of the board and extends slightly beyond the existing
+   * board edges. The outline has rounded corners.
+   * @param boardUUID
+   * @param color
+   * @param strokeWidth
+   * @param dashArray
+   * @returns
+   */
+  public renderOutlineIndicator(
+    boardUUID: string,
+    color: paper.Color,
+    strokeWidth: number,
+    dashArray: number[] = [],
+    opacity = 1,
+    overDrawPadding = 10
+  ): paper.Group | null {
+    const board = this.paperBoards[boardUUID];
+    if (!board) return null;
+
+    const rows = board.dimensions.height;
+    const cols = board.dimensions.width;
+    const boardWidth = cols * PaperBoard.baseTileSize.width;
+    const boardHeight = rows * PaperBoard.baseTileSize.height;
+    const boardRect = new paper.Rectangle(
+      board.position.x - boardWidth / 2 - overDrawPadding,
+      board.position.y - boardHeight / 2 - overDrawPadding,
+      boardWidth + 2 * overDrawPadding,
+      boardHeight + 2 * overDrawPadding
+    );
+
+    const group = new paper.Group();
+    // Create the outline path
+    const outline = new paper.Path.Rectangle(
+      boardRect,
+      PaperBoard.cornerRadius
+    );
+    outline.strokeColor = color;
+    outline.strokeWidth = strokeWidth;
+    outline.dashArray = dashArray;
+    outline.opacity = opacity;
+    group.addChild(outline);
+    return group;
+  }
+  /**
    * Randomly position boards within the canvas. They may overlap. Centered around origin.
    */
   shuffleBoards(canvasSize: paper.Size): void {
@@ -491,9 +552,9 @@ export class VisualState extends BaseState {
   }
 
   /**
-   *
-   * @param point
-   * @returns
+   * Check if a point is within any paper board, and return that board if so.
+   * @param point - The point to test, in project coordinates
+   * @returns The PaperBoard containing the point, or null if none
    */
   hitTestPaperBoard(point: paper.Point): PaperBoard | null {
     for (const board of Object.values(this.paperBoards)) {
@@ -507,6 +568,13 @@ export class VisualState extends BaseState {
     return null;
   }
 
+  /**
+   * Check if a line intersects any paper board, and return the first board it
+   * hits. If the start point of the line is on top of a board, that board is
+   * returned.
+   * @param line - The line to test, in project coordinates
+   * @returns The PaperBoard containing the line, or null if none
+   */
   hitTestLinePaperBoard(line: paper.Path.Line): PaperBoard | null {
     // If the start point is on top of a board, return that board
     const startBoard = this.hitTestPaperBoard(line.getPointAt(0)!);
@@ -693,7 +761,7 @@ export class VisualState extends BaseState {
             rectB,
             VisualState.boardPadding
           );
-          force = mtv.multiply(VisualState.repulsionStrength);
+          force = force.add(mtv.multiply(VisualState.repulsionStrength));
         }
         forces[board.uuid] = forces[board.uuid].add(force);
       }

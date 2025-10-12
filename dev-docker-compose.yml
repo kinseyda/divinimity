@@ -14,35 +14,49 @@ services:
     environment:
       - NODE_ENV=development
       # Public here means it is passed to the browser by Astro / Vite
-      - PUBLIC_BACKEND_URL=http://localhost:3000
+      - PUBLIC_BACKEND_URL=http://localhost:3000 # This is used by the frontend to call the backend, eg in the browser
       - PUBLIC_URL=http://localhost:4321
     depends_on:
       - backend
+    networks:
+      - devnet
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile.dev
     command: npm run dev
+    ports:
+      - "3000:3000" # Express server
     volumes:
       - ./backend:/app
-    ports:
-      - "3000:3000"
     environment:
       - NODE_ENV=development
-      - RETHINKDB_HOST=db
+      - RETHINKDB_HOST=db # Since the backend is in a container, it uses the service name 'db' to reach the database rather than localhost
       - RETHINKDB_PORT=28015
+      - RETHINKDB_DB=divinimity
       - PUBLIC_BACKEND_URL=http://localhost:3000
       - PUBLIC_URL=http://localhost:4321
     depends_on:
       - db
+    networks:
+      - devnet
 
   db:
     image: rethinkdb:latest
     ports:
       - "8081:8080" # Admin UI
-      - "28015:28015"
+    # Uncomment these if you want to access RethinkDB directly from your host
+    # machine
+    #   - "28015:28015" # Client drivers
+    #   - "29015:29015" # Cluster communication
     volumes:
       - rethinkdb_data:/data
+    networks:
+      - devnet
 
 volumes:
   rethinkdb_data:
+
+networks:
+  devnet:
+    driver: bridge

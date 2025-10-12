@@ -115,12 +115,6 @@
               v-else-if="secondPlayerType === PlayerType.NetworkResponder"
             >
               <div>Not yet implemented</div>
-              <button
-                class="btn btn-secondary mt-2"
-                @click="pingMultiplayerServer"
-              >
-                Ping Multiplayer Server
-              </button>
             </fieldset>
             <fieldset
               class="fieldset"
@@ -132,6 +126,12 @@
                 @click="pingMultiplayerServer"
               >
                 Ping Multiplayer Server
+              </button>
+              <button class="btn btn-primary mt-2" @click="backendHealthCheck">
+                Test Server Health
+              </button>
+              <button class="btn btn-accent mt-2" @click="backendDbHealthCheck">
+                Test Database Health
               </button>
             </fieldset>
           </TabContent>
@@ -245,6 +245,24 @@ export default defineComponent({
         .catch((error) => {
           console.error("There was a problem with the fetch operation:", error);
         });
+    },
+    backendHealthCheck() {
+      return fetch(`${backendUrl}/health/backend`).then((response) => {
+        if (!response.ok) {
+          throw new Error("Network response was not ok");
+        }
+        console.log("Backend health check response:", response);
+        return;
+      });
+    },
+    backendDbHealthCheck() {
+      return fetch(`${backendUrl}/health/db`).then((response) => {
+        if (!response.ok) {
+          throw new Error("Network response was not ok");
+        }
+        console.log("Backend DB health check response:", response);
+        return;
+      });
     },
     newGame() {
       const boards = [] as Board[];

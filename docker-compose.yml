@@ -9,6 +9,8 @@ services:
       - backend
     environment:
       - NODE_ENV=production
+    networks:
+      - prodnet
   backend:
     image: ghcr.io/kinseyda/divinimity:main-backend
     ports:
@@ -17,11 +19,19 @@ services:
       - NODE_ENV=production
     depends_on:
       - db
+    networks:
+      - prodnet
   db:
     image: rethinkdb:latest
     ports:
       - "14902:8080"
     volumes:
       - rethinkdb_data:/data
+    networks:
+      - prodnet
 volumes:
   rethinkdb_data:
+
+networks:
+  prodnet:
+    driver: bridge

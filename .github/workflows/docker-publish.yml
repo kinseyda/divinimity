@@ -22,6 +22,9 @@ env:
   IMAGE_NAME: ${{ github.repository }}
   PUBLIC_URL: https://divinimity.kinseyda.com
   PUBLIC_BACKEND_URL: https://divinimity.kinseyda.com/multiplayer
+  RETHINKDB_DB: divinimity
+  RETHINKDB_HOST: db
+  RETHINKDB_PORT: 28015
 
 jobs:
   build:

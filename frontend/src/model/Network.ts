@@ -10,7 +10,7 @@ async function updateNetworkAndGetAction(
   state: BaseState,
   connectionId: string
 ): Promise<Action> {
-  // connectionId is a key in the activeGames table. Getting player's selected
+  // connectionId is a key in the sessions table. Getting player's selected
   // action just means waiting for the next change to that key after our update
 
   return new Promise((resolve, reject) => {});

@@ -1,11 +1,13 @@
-import express from "express";
 import cors from "cors";
-// import { connect } from "rethinkdb";
+import express from "express";
+import { getConnection } from "./db-utils.ts";
 
 const allowedOrigins = [process.env.PUBLIC_URL || "http://localhost:4321"];
 const devOrigins = [
   "http://localhost:4321", // Vite / Astro
   "http://localhost:3000", // This Express server
+  "http://frontend:4321", // Vite / Astro in Docker
+  "http://backend:3000", // This Express server in Docker
 ];
 const allOrigins = [...allowedOrigins, ...devOrigins];
 
@@ -31,8 +33,18 @@ app.get(`/ping`, (_, res) => res.send("pong"));
 
 // Endpoint: health
 //  endpoint to check server health
-app.get(`/health`, (_, res) => res.send("OK"));
+app.get(`/health/backend`, (_, res) => res.send("OK"));
 
-// Endpoint:
+// Endpoint: db-health
+//  endpoint to check database connection
+app.get(`/health/db`, async (_, res) => {
+  try {
+    const conn = await getConnection();
+    conn.close();
+    res.send("OK");
+  } catch (error) {
+    res.status(500).send("Database connection failed");
+  }
+});
 
 app.listen(3000, () => console.log("Server running on port 3000"));

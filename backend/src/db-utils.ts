@@ -3,11 +3,13 @@ import pkg from "rethinkdb";
 const { connect, table } = pkg;
 
 export async function getConnection() {
-  return connect({
+	const conSettings = {
     host: process.env.RETHINKDB_HOST,
-    port: parseInt(process.env.RETHINKDB_PORT),
+    port: parseInt(process.env.RETHINKDB_PORT!),
     db: process.env.RETHINKDB_DB,
-  });
+  };
+	console.log("Connecting to RethinkDB with settings:", conSettings);
+  return connect(conSettings);
 }
 
 function generateSessionId(): string {

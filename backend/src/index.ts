@@ -1,6 +1,6 @@
 import cors from "cors";
 import express from "express";
-import { getConnection } from "./db-utils.ts";
+import { getConnection } from "./db-utils.js";
 
 const allowedOrigins = [process.env.PUBLIC_URL || "http://localhost:4321"];
 const devOrigins = [
@@ -43,7 +43,7 @@ app.get(`/health/db`, async (_, res) => {
     conn.close();
     res.send("OK");
   } catch (error) {
-    res.status(500).send("Database connection failed");
+    res.status(500).send(`DB connection failed: ${error}`);
   }
 });
 

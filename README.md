@@ -1,8 +1,8 @@
 # Divinimity
 
-Divinimity is a digital adaptation of the abstract strategy game Divinim.
+Divinimity is a web app adaptation of the abstract strategy game Divinim.
 
-Work in progress.
+See 
 
 ## Architecture
 
@@ -33,11 +33,7 @@ The project uses Docker for development and production.
   On the live server, this is the compose file used, pulling the images from
   Docker Hub instead of building the project. A github action,
   `docker-publish.yml`, builds and pushes the images to ghcr.io after every push
-  to main. The action sets the appropriate environment variables for the backend
-  and frontend, which are then used as build arguments in the dockerfile at
-  build time, so the `docker-compose.yml` file does not set the public URLs.
-  This means that all images pulled from the registry will be built with the
-  production environment variables baked in.
+  to main.
 - The `dev-docker-compose.yml` file is used for local development. It includes a
   volume for the frontend code, so changes are reflected and hot-reloaded in the
   browser immediately.

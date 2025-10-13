@@ -1,6 +1,5 @@
 {
   "name": "divinimity-backend",
-  "type": "module",
   "version": "0.0.1",
   "scripts": {
     "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts -L",
@@ -10,7 +9,8 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^5.1.0",
-    "rethinkdb": "^2.4.2"
+    "rethinkdb": "^2.4.2",
+    "socket.io": "^4.8.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",

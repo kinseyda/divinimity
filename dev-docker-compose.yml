@@ -14,7 +14,7 @@ services:
     environment:
       - NODE_ENV=development
       # Public here means it is passed to the browser by Astro / Vite
-      - PUBLIC_BACKEND_URL=http://localhost:3000 # This is used by the frontend to call the backend, eg in the browser
+      - PUBLIC_BACKEND_URL=http://localhost:3000 # This is used by the frontend to call the backend, i.e. by the browser
       - PUBLIC_URL=http://localhost:4321
     depends_on:
       - backend

@@ -2,14 +2,14 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "module": "ESNext",
-    "moduleResolution": "Bundler",
+    "module": "commonjs",
+    "moduleResolution": "node",
     "target": "ES2024",
     "jsx": "react-jsx",
     "strictNullChecks": true,
     "strictFunctionTypes": true,
-    "strict": true,
-    "sourceMap": true
+    "esModuleInterop": true,
+    "strict": true
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]

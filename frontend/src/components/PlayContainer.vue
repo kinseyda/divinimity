@@ -133,6 +133,12 @@
               <button class="btn btn-accent mt-2" @click="backendDbHealthCheck">
                 Test Database Health
               </button>
+              <button
+                class="btn btn-info mt-2"
+                @click="testWebSocketConnection"
+              >
+                Test WebSocket Connection
+              </button>
             </fieldset>
           </TabContent>
           <TabContent groupName="setupTabs" tabName="Rules">
@@ -175,6 +181,7 @@ import { gameSetupStore, PlayerType } from "./GameSetupStore";
 import TabContent from "./TabContent.vue";
 import TabGroup from "./TabGroup.vue";
 import TurnIndicator, { PlayerState } from "./TurnIndicator.vue";
+import { io } from "socket.io-client";
 
 const backendUrl = import.meta.env.PUBLIC_BACKEND_URL;
 
@@ -263,6 +270,19 @@ export default defineComponent({
         console.log("Backend DB health check response:", response);
         return;
       });
+    },
+    testWebSocketConnection() {
+      const socket = io(backendUrl, { path: "/ws" });
+      // Open and close a connection quickly
+      socket.on("connect", () => {
+        console.log("Connected to server");
+      });
+      socket.on("disconnect", () => {
+        console.log("Disconnected from server");
+      });
+      setTimeout(() => {
+        socket.close();
+      }, 1000);
     },
     newGame() {
       const boards = [] as Board[];

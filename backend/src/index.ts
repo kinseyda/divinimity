@@ -1,6 +1,7 @@
 import cors from "cors";
 import express from "express";
-import { getConnection } from "./db-utils.js";
+import { getConnection } from "./db-utils";
+import { Server } from "socket.io";
 
 const allowedOrigins = [process.env.PUBLIC_URL || "http://localhost:4321"];
 const devOrigins = [
@@ -47,4 +48,21 @@ app.get(`/health/db`, async (_, res) => {
   }
 });
 
-app.listen(3000, () => console.log("Server running on port 3000"));
+const server = app.listen(3000, () => {
+  console.log("Server running on port 3000");
+  console.log(`Allowed origins: ${allOrigins}`);
+});
+
+const io = new Server(server, {
+  path: "/ws",
+  cors: {
+    origin: allOrigins,
+    methods: ["GET", "POST"],
+  },
+});
+io.on("connection", (socket) => {
+  console.log("a user connected");
+  socket.on("disconnect", () => {
+    console.log("user disconnected");
+  });
+});

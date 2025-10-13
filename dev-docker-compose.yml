@@ -15,6 +15,8 @@ services:
       - NODE_ENV=development
       # Public here means it is passed to the browser by Astro / Vite
       - PUBLIC_BACKEND_URL=http://localhost:3000 # This is used by the frontend to call the backend, i.e. by the browser
+      - PUBLIC_WEBSOCKET_URL=ws://localhost:3000
+      - PUBLIC_WEBSOCKET_PATH=/ws
       - PUBLIC_URL=http://localhost:4321
     depends_on:
       - backend
@@ -36,6 +38,7 @@ services:
       - RETHINKDB_DB=divinimity
       - PUBLIC_BACKEND_URL=http://localhost:3000
       - PUBLIC_URL=http://localhost:4321
+      - PUBLIC_WEBSOCKET_PATH=ws
     depends_on:
       - db
     networks:

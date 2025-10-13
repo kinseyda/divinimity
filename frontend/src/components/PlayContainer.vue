@@ -189,6 +189,24 @@ if (!backendUrl) {
   throw new Error("PUBLIC_BACKEND_URL is not set");
 }
 
+const publicUrl = import.meta.env.PUBLIC_URL;
+
+if (!publicUrl) {
+  throw new Error("PUBLIC_URL is not set");
+}
+
+const websocketUrl = import.meta.env.PUBLIC_WEBSOCKET_URL;
+
+if (!websocketUrl) {
+  throw new Error("PUBLIC_WEBSOCKET_URL is not set");
+}
+
+const websocketPath = import.meta.env.PUBLIC_WEBSOCKET_PATH;
+
+if (!websocketPath) {
+  throw new Error("PUBLIC_WEBSOCKET_PATH is not set");
+}
+
 export default defineComponent({
   components: {
     PencilRulerIcon,
@@ -272,7 +290,19 @@ export default defineComponent({
       });
     },
     testWebSocketConnection() {
-      const socket = io(backendUrl, { path: "/ws" });
+      console.log(
+        "Testing WebSocket connection to",
+        websocketUrl,
+        "with path",
+        websocketPath
+      );
+      const socket = io(websocketUrl, {
+        path: websocketPath,
+        transports: ["websocket"],
+      });
+      socket.on("connect_error", (err) => {
+        console.error("Connection error:", err);
+      });
       // Open and close a connection quickly
       socket.on("connect", () => {
         console.log("Connected to server");
@@ -282,6 +312,7 @@ export default defineComponent({
       });
       setTimeout(() => {
         socket.close();
+        console.log("Closed connection");
       }, 1000);
     },
     newGame() {

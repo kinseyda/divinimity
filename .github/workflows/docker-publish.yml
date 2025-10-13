@@ -20,6 +20,10 @@ env:
   REGISTRY: ghcr.io
   # github.repository as <account>/<repo>
   IMAGE_NAME: ${{ github.repository }}
+  PUBLIC_BACKEND_URL: https://divinimity.kinseyda.com/api # This is used by the frontend to call the backend, i.e. by the browser
+  PUBLIC_WEBSOCKET_URL: wss://divinimity.kinseyda.com
+  PUBLIC_WEBSOCKET_PATH: /ws
+  PUBLIC_URL: https://divinimity.kinseyda.com
 
 jobs:
   build:
@@ -77,8 +81,10 @@ jobs:
           file: ./frontend/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           build-args: |
-            PUBLIC_BACKEND_URL=https://divinimity.kinseyda.com/multiplayer
-            PUBLIC_URL=https://divinimity.kinseyda.com
+            PUBLIC_BACKEND_URL=${{ env.PUBLIC_BACKEND_URL }}
+            PUBLIC_WEBSOCKET_URL=${{ env.PUBLIC_WEBSOCKET_URL }}
+            PUBLIC_WEBSOCKET_PATH=${{ env.PUBLIC_WEBSOCKET_PATH }}
+            PUBLIC_URL=${{ env.PUBLIC_URL }}
           tags: ${{ steps.meta.outputs.tags }}-frontend
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

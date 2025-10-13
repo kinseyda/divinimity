@@ -9,8 +9,6 @@ services:
       - backend
     environment:
       - NODE_ENV=production
-      - PUBLIC_BACKEND_URL=https://divinimity.kinseyda.com/multiplayer
-      - PUBLIC_URL=https://divinimity.kinseyda.com
     networks:
       - prodnet
   backend:
@@ -22,7 +20,8 @@ services:
       - RETHINKDB_HOST=db # Since the backend is in a container, it uses the service name 'db' to reach the database rather than localhost
       - RETHINKDB_PORT=28015
       - RETHINKDB_DB=divinimity
-      - PUBLIC_BACKEND_URL=https://divinimity.kinseyda.com/multiplayer
+      - PUBLIC_BACKEND_URL=https://divinimity.kinseyda.com/api
+      - PUBLIC_WEBSOCKET_PATH=/ws
       - PUBLIC_URL=https://divinimity.kinseyda.com
     depends_on:
       - db

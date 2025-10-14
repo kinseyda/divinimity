@@ -56,4 +56,5 @@ The project uses Docker for development and production.
 - Implement AI players, time limited minimax algorithm
 - Scored divinim
 - Animations for slicing and removed boards disappearing
+- Visual options (physics, tile spacing, colors for colorblindness?)
 - Mobile app with capacitor (not sure how difficult this is)

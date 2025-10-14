@@ -1,0 +1,21 @@
+FROM node:lts-alpine
+# Repository root
+WORKDIR /app
+
+# This is the root repo package.json, which lists the workspaces
+COPY package*.json ./
+
+# Copy workspaces manifests
+COPY backend/package*.json ./backend/
+COPY shared/package*.json ./shared/
+
+# Install all dependencies for backend and shared workspaces
+RUN npm install
+
+COPY . .
+
+# Set working directory to backend
+WORKDIR /app/backend
+
+EXPOSE 3000
+CMD ["npm", "run", "dev"]

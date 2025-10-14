@@ -1,8 +1,8 @@
 {
-  "name": "divinimity-backend",
+  "name": "@divinimity/backend",
   "version": "0.0.1",
   "scripts": {
-    "dev": "nodemon --watch src --ext ts --exec ts-node src/index.ts -L",
+    "dev": "nodemon",
     "build": "tsc",
     "start": "node dist/index.js"
   },
@@ -10,7 +10,8 @@
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "rethinkdb": "^2.4.2",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "@divinimity/shared": "*"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
@@ -19,6 +20,7 @@
     "@types/rethinkdb": "^2.3.21",
     "nodemon": "^3",
     "ts-node": "^10",
+    "tsconfig-paths": "^4.2.0",
     "typescript": "^5"
   }
 }

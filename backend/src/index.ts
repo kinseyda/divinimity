@@ -2,6 +2,7 @@ import cors from "cors";
 import express from "express";
 import { getConnection } from "./db-utils";
 import { Server } from "socket.io";
+import { SocketEvents } from "@divinimity/shared/index";
 
 const allowedOrigins = [process.env.PUBLIC_URL || "http://localhost:4321"];
 const devOrigins = [
@@ -62,7 +63,28 @@ const io = new Server(server, {
 });
 io.on("connection", (socket) => {
   console.log("a user connected");
-  socket.on("disconnect", () => {
+  // Handle incoming socket events here. Upon connection, a user is either
+  // trying to start a session or join one. They will emit either a
+  // "start-session" or "join-session" event with their player ID and (if
+  // joining) the session ID. Then, in both cases, the server will respond with
+  // a "session-started" event, with the full session data (including the
+  // session ID). From there, players will emit "make-move" events with their
+  // move data, and the server will broadcast the updated session state to both
+  // players with a "session-updated" event.
+
+  socket.on(SocketEvents.START_SESSION, (data) => {
+    // Handle start session
+  });
+
+  socket.on(SocketEvents.JOIN_SESSION, (data) => {
+    // Handle join session
+  });
+
+  socket.on(SocketEvents.MAKE_MOVE, (data) => {
+    // Handle make move
+  });
+
+  socket.on(SocketEvents.DISCONNECT, () => {
     console.log("user disconnected");
   });
 });

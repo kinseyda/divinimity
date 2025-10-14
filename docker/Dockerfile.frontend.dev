@@ -1,0 +1,20 @@
+FROM node:lts-alpine 
+# Repository root
+WORKDIR /app
+
+# This is the root repo package.json, which lists the workspaces
+COPY package*.json ./
+
+# Copy workspaces manifests
+COPY frontend/package*.json ./frontend/
+COPY shared/package*.json ./shared/
+
+RUN npm install
+
+COPY . .
+
+# Set working directory to frontend
+WORKDIR /app/frontend
+
+EXPOSE 4321
+CMD ["npm", "run", "dev"]

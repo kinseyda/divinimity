@@ -77,8 +77,8 @@ jobs:
         id: build-and-push
         uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
+          context: .
+          file: ./docker/Dockerfile.frontend.prod
           push: ${{ github.event_name != 'pull_request' }}
           build-args: |
             PUBLIC_BACKEND_URL=${{ env.PUBLIC_BACKEND_URL }}
@@ -95,8 +95,8 @@ jobs:
         id: build-and-push-backend
         uses: docker/build-push-action@0565240e2d4ab88bba5387d719585280857ece09 # v5.0.0
         with:
-          context: ./backend
-          file: ./backend/Dockerfile
+          context: .
+          file: ./docker/Dockerfile.backend.prod
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}-backend
           labels: ${{ steps.meta.outputs.labels }}

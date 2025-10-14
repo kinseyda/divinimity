@@ -3,11 +3,11 @@
 services:
   frontend:
     build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
+      context: .
+      dockerfile: ./docker/Dockerfile.frontend.dev
     command: npm run dev
     volumes:
-      - ./frontend:/app
+      - .:/app
       - /app/node_modules
     ports:
       - "4321:4321" # Astro dev server
@@ -24,13 +24,13 @@ services:
       - devnet
   backend:
     build:
-      context: ./backend
-      dockerfile: Dockerfile.dev
+      context: .
+      dockerfile: ./docker/Dockerfile.backend.dev
     command: npm run dev
     ports:
       - "3000:3000" # Express server
     volumes:
-      - ./backend:/app
+      - .:/app
     environment:
       - NODE_ENV=development
       - RETHINKDB_HOST=db # Since the backend is in a container, it uses the service name 'db' to reach the database rather than localhost

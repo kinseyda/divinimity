@@ -1,11 +1,28 @@
-FROM node:lts-alpine AS build
+FROM node:24-trixie AS build
+# Repository root
 WORKDIR /app
+
+# This is the root repo package.json, which lists the workspaces
 COPY package*.json ./
+
+# Copy workspaces manifests
+COPY backend/package*.json ./backend/
+COPY shared/package*.json ./shared/
+
+# Install only backend workspace deps
+WORKDIR /app/backend
 RUN npm install
+
+# Copy the rest of the repo
+WORKDIR /app
 COPY . .
+
+# Set working directory to backend
+WORKDIR /app/backend
+
 RUN npm run build
 
-FROM node:lts-alpine AS runtime
+FROM node:24-trixie AS runtime
 WORKDIR /app
 COPY --from=build /app/dist ./dist
 COPY package*.json ./

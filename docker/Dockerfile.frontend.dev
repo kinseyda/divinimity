@@ -1,6 +1,7 @@
-FROM node:lts-alpine 
+FROM node:24-trixie 
 # Repository root
 WORKDIR /app
+
 
 # This is the root repo package.json, which lists the workspaces
 COPY package*.json ./

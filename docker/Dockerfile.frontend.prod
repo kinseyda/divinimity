@@ -1,12 +1,8 @@
 # ===== Build Stage =====
-FROM node:lts-alpine AS build
+FROM node:24-trixie AS build
 WORKDIR /app
 
-#	- PUBLIC_BACKEND_URL=https://divinimity.kinseyda.com/api # This is used by the frontend to call the backend, i.e. by the browser
-#   - PUBLIC_WEBSOCKET_URL=wss://divinimity.kinseyda.com
-#   - PUBLIC_WEBSOCKET_PATH=/ws
-#   - PUBLIC_URL=https://divinimity.kinseyda.com
-
+# Build-time variables for frontend
 ARG PUBLIC_URL
 ENV PUBLIC_URL=$PUBLIC_URL
 ARG PUBLIC_BACKEND_URL
@@ -16,14 +12,24 @@ ENV PUBLIC_WEBSOCKET_URL=$PUBLIC_WEBSOCKET_URL
 ARG PUBLIC_WEBSOCKET_PATH
 ENV PUBLIC_WEBSOCKET_PATH=$PUBLIC_WEBSOCKET_PATH
 
+# This is the root repo package.json, which lists the workspaces
 COPY package*.json ./
+
+# Copy workspaces manifests
+COPY frontend/package*.json ./frontend/
+COPY shared/package*.json ./shared/
+
 RUN npm install
 COPY . .
+
+# Set working directory to frontend
+WORKDIR /app/frontend
+
 RUN npm run build
 
 # ===== Runtime Stage =====
 FROM nginx:alpine AS runtime
-COPY ./nginx/nginx.conf /etc/nginx/nginx.conf
+COPY ./frontend/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]

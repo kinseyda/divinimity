@@ -1,21 +1,22 @@
-FROM node:lts-alpine
-# Repository root
+FROM node:24-trixie
 WORKDIR /app
 
-# This is the root repo package.json, which lists the workspaces
+# Copy manifests for dependency installation
 COPY package*.json ./
-
-# Copy workspaces manifests
 COPY backend/package*.json ./backend/
 COPY shared/package*.json ./shared/
 
-# Install all dependencies for backend and shared workspaces
+# Ensure dev deps are installed
+ENV NODE_ENV=development
+
+# Install only backend workspace deps
+WORKDIR /app/backend
 RUN npm install
 
+# Copy the rest of the repo
+WORKDIR /app
 COPY . .
 
-# Set working directory to backend
 WORKDIR /app/backend
-
 EXPOSE 3000
 CMD ["npm", "run", "dev"]

@@ -1,8 +1,12 @@
 {
-  "extends": "../tsconfig.json",
   "compilerOptions": {
+    // "target": "es5",
+    "module": "nodenext",
+    "esModuleInterop": true,
+    "moduleResolution": "nodenext",
     "outDir": "dist"
   },
-  "include": ["src"],
-  "exclude": ["node_modules", "dist"]
+  //   "include": ["src"],
+  "exclude": ["node_modules", "dist"],
+  "references": [{ "path": "../shared" }]
 }

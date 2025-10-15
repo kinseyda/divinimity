@@ -1,5 +1,6 @@
 {
   "watch": ["src"],
   "ext": "ts",
-  "exec": "ts-node -r tsconfig-paths/register --project tsconfig.json ./src/index.ts"
+  "legacyWatch": true,
+  "exec": "ts-node --experimental-specifier-resolution=node -r tsconfig-paths/register --project tsconfig.json ./src/index.ts"
 }

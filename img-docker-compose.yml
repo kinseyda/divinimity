@@ -2,35 +2,28 @@
 
 services:
   frontend:
-    build:
-      context: .
-      dockerfile: ./docker/Dockerfile.frontend.prod
-      args:
-        - PUBLIC_BACKEND_URL=http://localhost:14901
-        - PUBLIC_WEBSOCKET_URL=ws://localhost:14901
-        - PUBLIC_WEBSOCKET_PATH=/ws
-        - PUBLIC_URL=http://localhost:14900
+    image: ghcr.io/kinseyda/divinimity:main-frontend
     ports:
       - "14900:8080"
     depends_on:
       - backend
+    environment:
+      - NODE_ENV=production
     networks:
       - prodnet
   backend:
-    build:
-      context: .
-      dockerfile: ./docker/Dockerfile.backend.prod
+    image: ghcr.io/kinseyda/divinimity:main-backend
+    ports:
+      - "14901:14901"
     environment:
       - NODE_ENV=production
       - PORT=14901
       - RETHINKDB_HOST=db # Since the backend is in a container, it uses the service name 'db' to reach the database rather than localhost
       - RETHINKDB_PORT=28015
       - RETHINKDB_DB=divinimity
-      - PUBLIC_BACKEND_URL=http://localhost:14901
+      - PUBLIC_BACKEND_URL=https://divinimity.kinseyda.com/api
       - PUBLIC_WEBSOCKET_PATH=/ws
-      - PUBLIC_URL=http://localhost:14900
-    ports:
-      - "14901:14901"
+      - PUBLIC_URL=https://divinimity.kinseyda.com
     depends_on:
       - db
     networks:

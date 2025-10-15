@@ -5,10 +5,9 @@ services:
     build:
       context: .
       dockerfile: ./docker/Dockerfile.frontend.dev
-    command: npm run dev
     volumes:
-      - .:/app
-      - /app/node_modules
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules # Prevents overwriting node_modules in the container
     ports:
       - "4321:4321" # Astro dev server
     environment:
@@ -26,13 +25,14 @@ services:
     build:
       context: .
       dockerfile: ./docker/Dockerfile.backend.dev
-    command: npm run dev
     ports:
       - "3000:3000" # Express server
     volumes:
-      - .:/app
+      - ./backend:/app/backend
+      - /app/backend/node_modules # Prevents overwriting node_modules in the container
     environment:
       - NODE_ENV=development
+      - PORT=3000
       - RETHINKDB_HOST=db # Since the backend is in a container, it uses the service name 'db' to reach the database rather than localhost
       - RETHINKDB_PORT=28015
       - RETHINKDB_DB=divinimity

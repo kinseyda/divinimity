@@ -1,31 +1,48 @@
+# ---- Build stage ----
 FROM node:24-trixie AS build
-# Repository root
 WORKDIR /app
 
-# This is the root repo package.json, which lists the workspaces
-COPY package*.json ./
-
-# Copy workspaces manifests
+# Copy manifests and tsconfigs for dependency installation
 COPY backend/package*.json ./backend/
-COPY shared/package*.json ./shared/
+COPY backend/tsconfig.json ./backend/
+COPY shared/tsconfig.json ./shared/
 
-# Install only backend workspace deps
+
+# Ensure dev deps are not installed
+ENV NODE_ENV=production
+
 WORKDIR /app/backend
 RUN npm install
 
 # Copy the rest of the repo
 WORKDIR /app
-COPY . .
+COPY  . .
 
-# Set working directory to backend
+# Build shared first
+WORKDIR /app/shared
+RUN npm install -g typescript
+RUN tsc -b
+
+# Build backend
 WORKDIR /app/backend
-
 RUN npm run build
 
-FROM node:24-trixie AS runtime
+
+# ---- Production stage ----
+FROM node:24-trixie-slim AS production
 WORKDIR /app
-COPY --from=build /app/dist ./dist
-COPY package*.json ./
+
+# Copy built backend from build stage
+COPY --from=build /app/backend/dist ./backend/dist
+# Copy package files to install production dependencies
+COPY --from=build /app/backend/package*.json ./backend/
+# Copy shared files (the built JS and the TS source files are all in the root of
+# shared)
+COPY --from=build /app/shared ./shared
+
+# Install production dependencies for backend
+WORKDIR /app/backend
 RUN npm install --omit=dev
+
 EXPOSE 3000
 CMD ["npm", "run", "start"]

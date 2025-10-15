@@ -12,24 +12,35 @@ ENV PUBLIC_WEBSOCKET_URL=$PUBLIC_WEBSOCKET_URL
 ARG PUBLIC_WEBSOCKET_PATH
 ENV PUBLIC_WEBSOCKET_PATH=$PUBLIC_WEBSOCKET_PATH
 
-# This is the root repo package.json, which lists the workspaces
-COPY package*.json ./
-
-# Copy workspaces manifests
+# Copy manifests and tsconfigs for dependency installation
 COPY frontend/package*.json ./frontend/
-COPY shared/package*.json ./shared/
+COPY frontend/tsconfig.json ./frontend/
+COPY shared/tsconfig.json ./shared/
 
+# Ensure dev deps are not installed
+ENV NODE_ENV=production
+
+# Install frontend dependencies
+WORKDIR /app/frontend
 RUN npm install
+
+# Copy the rest of the repo
+WORKDIR /app
 COPY . .
 
-# Set working directory to frontend
-WORKDIR /app/frontend
 
+# Build shared first
+WORKDIR /app/shared
+RUN npm install -g typescript
+RUN tsc -b
+
+# Build frontend
+WORKDIR /app/frontend
 RUN npm run build
 
 # ===== Runtime Stage =====
 FROM nginx:alpine AS runtime
 COPY ./frontend/nginx/nginx.conf /etc/nginx/nginx.conf
-COPY --from=build /app/dist /usr/share/nginx/html
+COPY --from=build /app/frontend/dist /usr/share/nginx/html
 EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]

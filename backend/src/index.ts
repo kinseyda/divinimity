@@ -1,16 +1,13 @@
 import cors from "cors";
 import express from "express";
-import { getConnection } from "./db-utils";
 import { Server } from "socket.io";
-import { SocketEvents } from "@divinimity/shared/index";
+import { SocketEvents } from "../../shared";
+import { getConnection } from "./db-utils";
 
-const allowedOrigins = [process.env.PUBLIC_URL || "http://localhost:4321"];
-const devOrigins = [
-  "http://localhost:4321", // Vite / Astro
-  "http://localhost:3000", // This Express server
-  "http://frontend:4321", // Vite / Astro in Docker
-  "http://backend:3000", // This Express server in Docker
-];
+const allowedOrigins = [process.env.PUBLIC_URL];
+const port = process.env.PORT || 3000;
+
+const devOrigins = [];
 const allOrigins = [...allowedOrigins, ...devOrigins];
 
 const app = express();
@@ -31,7 +28,9 @@ app.use(
 
 // Endpoint: ping
 //  endpoint to check server status
-app.get(`/ping`, (_, res) => res.send("pong"));
+app.get(`/ping`, (_, res) =>
+  res.send(`PONG from backend at ${new Date().toISOString()}`)
+);
 
 // Endpoint: health
 //  endpoint to check server health
@@ -49,8 +48,8 @@ app.get(`/health/db`, async (_, res) => {
   }
 });
 
-const server = app.listen(3000, () => {
-  console.log("Server running on port 3000");
+const server = app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
   console.log(`Allowed origins: ${allOrigins}`);
 });
 

@@ -1,18 +1,28 @@
-FROM node:24-trixie 
-# Repository root
+FROM node:24-trixie
 WORKDIR /app
 
-
-# This is the root repo package.json, which lists the workspaces
-COPY package*.json ./
-
-# Copy workspaces manifests
+# Copy manifests and tsconfigs for dependency installation
 COPY frontend/package*.json ./frontend/
-COPY shared/package*.json ./shared/
+COPY frontend/tsconfig.json ./frontend/
+COPY shared/tsconfig.json ./shared/
 
+
+# Ensure dev deps are installed
+ENV NODE_ENV=development
+
+# Install frontend dependencies
+WORKDIR /app/frontend
 RUN npm install
 
+# Copy the rest of the repo
+WORKDIR /app
 COPY . .
+
+# Build shared first
+WORKDIR /app/shared
+RUN npm install -g typescript
+RUN tsc -b
+
 
 # Set working directory to frontend
 WORKDIR /app/frontend

@@ -2,8 +2,6 @@
 
 Divinimity is a web app adaptation of the abstract strategy game Divinim.
 
-See
-
 ## Architecture
 
 The project is split into two main parts: a backend server and a frontend
@@ -29,19 +27,26 @@ part of this repository).
 
 The project uses Docker for development and production.
 
-- The `docker-compose.yml` file shows how to set up the production environment.
-  On the live server, this is the compose file used, pulling the images from
-  Docker Hub instead of building the project. A github action,
-  `docker-publish.yml`, builds and pushes the images to ghcr.io after every push
-  to main. The action sets the appropriate environment variables for the
-  frontend, which are then used as build arguments in the dockerfile at build
-  time, so the `docker-compose.yml` file does not set the public URLs. This
-  means that all images pulled from the registry will be built with the
-  production environment variables baked in, allowing for the images to be
-  portable and the files to be completely static.
-- The `dev-docker-compose.yml` file is used for local development. It includes a
-  volume for the frontend code, so changes are reflected and hot-reloaded in the
-  browser immediately.
+- The `docker-compose.yml` file shows how to set up a production environment
+  from within the repository: to build from source and then run in production
+  mode. This will be equivalent to what the live server is doing.
+- The `img-docker-compose.yml` file is used for the live server, pulling the
+  images from Docker Hub instead of building the project.
+  - Note for production deployment: A github action, `docker-publish.yml`,
+    builds and pushes the images to ghcr.io after every push to main. The action
+    sets the appropriate environment variables for the frontend, which are then
+    used as build arguments in the dockerfile at build time, so the
+    `img-docker-compose.yml` file does not set the public URLs. This means that
+    all images pulled from the registry will be built with the production
+    environment variables baked in, allowing for the images to be portable and
+    the files to be completely static. The backend still gets the database
+    connection info and public url from environment variables at runtime,
+    however. If someone wanted to run their own deployment, they would need to
+    build their own images with the appropriate frontend environment variables
+    set.
+- The `dev-docker-compose.yml` file is used for local development. It uses
+  volumes to mount the source code into the containers, allowing for live
+  reloading of both the backend and frontend when code is changed.
 
 ## To-Do
 

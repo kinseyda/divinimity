@@ -24,6 +24,7 @@ import {
   type RedrawEvent,
 } from "../model/VisualModel";
 import TurnIndicator, { PlayerState } from "./TurnIndicator.vue";
+import ScoreDisplay from "./ScoreDisplay.vue";
 
 function placeAroundCenter(
   boards: PaperBoard[],
@@ -53,6 +54,7 @@ export default defineComponent({
   components: {
     PaperCanvasFull,
     TurnIndicator,
+    ScoreDisplay,
     MoveIcon,
   },
   data() {
@@ -385,8 +387,10 @@ export default defineComponent({
     isWinnerVisualPlayer(): boolean {
       if (!this.game) return false;
       const winnerInfos = this.game.winners;
-      if (winnerInfos.length === 0) return false;
-      return winnerInfos.includes(this.getVisualPlayer()?.info!);
+      if (winnerInfos.length !== 1) return false;
+      const visualPlayer = this.getVisualPlayer();
+      if (!visualPlayer) return false;
+      return winnerInfos[0] === visualPlayer.info;
     },
     shuffleBoards() {
       if (!this.game) return;
@@ -397,7 +401,9 @@ export default defineComponent({
       if (this.game.winners.length > 0) {
         if (this.isWinnerVisualPlayer()) {
           return PlayerState.YouWin;
-        } else if (this.game.winners.length === this.game.players.length) {
+        } else if (
+          this.game.winners.some((p) => p === this.getVisualPlayer()?.info)
+        ) {
           return PlayerState.YouDraw;
         } else {
           return PlayerState.YouLose;
@@ -412,7 +418,6 @@ export default defineComponent({
     redrawFunc(event: RedrawEvent, project: paper.Project, view: paper.View) {
       if (!this.game) return;
 
-      // console.log("Redrawing with state:", state);
       const {
         primary: primaryColor,
         secondary: secondaryColor,
@@ -631,23 +636,28 @@ export default defineComponent({
 });
 </script>
 <template>
-  <PaperCanvasFull :redrawFunction="redrawFunc" class="size-full" />
-  <div v-if="interactive">
-    <div class="absolute right-4 top-4">
-      <span
-        class="btn btn-lg btn-primary btn-circle"
-        :class="{
-          'btn-active border-4 border-info': curTool === ToolType.Drag,
-        }"
-        @click="toggleTool"
-      >
-        <MoveIcon class="size-6" />
-      </span>
-    </div>
-    <TurnIndicator
-      class="alert absolute left-1/2 -translate-x-1/2 top-4 pointer-events-none"
-      :playerState="getPlayerState()"
-    />
+  <PaperCanvasFull :redrawFunction="redrawFunc" />
+  <div v-if="interactive" class="absolute right-4 top-4">
+    <span
+      class="btn btn-lg btn-circle"
+      :class="{
+        'btn-active border-4 border-info': curTool === ToolType.Drag,
+        'border-2 border-primary': curTool === ToolType.Slice,
+      }"
+      @click="toggleTool"
+    >
+      <MoveIcon class="size-6" />
+    </span>
   </div>
+  <TurnIndicator
+    v-if="interactive"
+    class="alert absolute left-1/2 -translate-x-1/2 top-4 pointer-events-none"
+    :playerState="getPlayerState()"
+  />
+  <ScoreDisplay
+    v-if="interactive && game.state.scoreConditions.length > 0"
+    class="alert absolute left-1/2 -translate-x-1/2 bottom-4 pointer-events-none"
+    :gameState="game.state"
+  />
 </template>
 <style scoped></style>

@@ -1,7 +1,7 @@
 <template>
   <div class="size-full">
     <DrawerContent
-      drawerId="game-setup-drawer"
+      :drawerId="gameSetupDrawerId"
       drawerTitle="Game Setup"
       :drawerLeft="true"
     >
@@ -10,7 +10,7 @@
       </template>
       <template #content>
         <DrawerContent
-          drawerId="game-info-drawer"
+          :drawerId="gameInfoDrawerId"
           drawerTitle="Current Game"
           :drawerLeft="false"
           v-if="game"
@@ -19,9 +19,7 @@
             <InfoIcon class="size-8" />
           </template>
           <template #content>
-            <div class="size-full relative">
-              <GameDisplay :interactive="true" :game="game" />
-            </div>
+            <GameDisplay :interactive="true" :game="game" />
           </template>
           <template #drawerContent>
             <TabGroup>
@@ -56,13 +54,7 @@
                     </table>
                   </div>
                   <div class="shrink-0 flex flex-col gap-2 text-xs">
-                    <span>Slice boards by clicking and dragging</span>
-                    <span>Last player to take a turn wins</span>
-                    <span>
-                      Rearrange boards by holding
-                      <kbd class="kbd kbd-xs">Shift</kbd> or using the on-screen
-                      toggle button, then clicking and dragging boards
-                    </span>
+                    <RulesDescription :gameState="game.state" />
                   </div>
                 </div>
               </TabContent>
@@ -83,18 +75,18 @@
             <fieldset class="fieldset">
               <legend class="fieldset-legend">Second Player</legend>
               <select class="select" v-model="secondPlayerType">
-                <option :value="PlayerType.Random">Random Player</option>
-                <option :value="PlayerType.NetworkInitiator">
+                <option :value="PlayerTypeEnum.Random">CPU - Random</option>
+                <option :value="PlayerTypeEnum.NetworkInitiator">
                   Network (Host new game)
                 </option>
-                <option :value="PlayerType.NetworkResponder">
+                <option :value="PlayerTypeEnum.NetworkResponder">
                   Network (Join a game)
                 </option>
               </select>
             </fieldset>
             <fieldset
               class="fieldset"
-              v-if="secondPlayerType === PlayerType.Random"
+              v-if="secondPlayerType === PlayerTypeEnum.Random"
             >
               <legend class="fieldset-legend">Random Player Delay</legend>
               <input
@@ -112,13 +104,13 @@
             </fieldset>
             <fieldset
               class="fieldset"
-              v-else-if="secondPlayerType === PlayerType.NetworkResponder"
+              v-else-if="secondPlayerType === PlayerTypeEnum.NetworkResponder"
             >
               <div>Not yet implemented</div>
             </fieldset>
             <fieldset
               class="fieldset"
-              v-else-if="secondPlayerType === PlayerType.NetworkInitiator"
+              v-else-if="secondPlayerType === PlayerTypeEnum.NetworkInitiator"
             >
               <div>Not yet implemented</div>
               <button
@@ -142,20 +134,50 @@
             </fieldset>
           </TabContent>
           <TabContent groupName="setupTabs" tabName="Rules">
-            You will be able to select game rules here.</TabContent
-          >
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend">Win Conditions</legend>
+              <select class="select" v-model="winCondition">
+                <option :value="WinConditionEnum.NoMovesLeft">
+                  No Moves Left - Last Player Wins
+                </option>
+                <option :value="WinConditionEnum.NoMovesHighestScore">
+                  No Moves Left - Highest Score Wins
+                </option>
+                <option :value="WinConditionEnum.NoMovesLowestScore">
+                  No Moves Left - Lowest Score Wins
+                </option>
+              </select>
+            </fieldset>
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend">Scoring System</legend>
+              <select class="select" v-model="scoringSystem">
+                <option :value="ScoringSystemEnum.None">Unscored</option>
+                <option :value="ScoringSystemEnum.MarkedSquares">
+                  Marked Squares
+                </option>
+                <option :value="ScoringSystemEnum.TotalArea">Total Area</option>
+              </select>
+            </fieldset>
+            <fieldset class="fieldset">
+              <legend class="fieldset-legend">Slice Restrictions</legend>
+              <select class="select" v-model="sliceRestriction">
+                <option :value="SliceRestriction.None">No Restrictions</option>
+              </select>
+            </fieldset>
+          </TabContent>
           <TabContent groupName="setupTabs" tabName="Boards">
             You will be able to select board configurations (dimensions and
             markings) here.
           </TabContent>
         </TabGroup>
 
-        <button
-          class="btn btn-primary btn-lg fixed bottom-0 right-0 m-8"
+        <label
+          :for="gameSetupDrawerId"
           @click="newGame"
+          class="btn btn-primary btn-lg fixed bottom-0 right-0 m-8"
         >
-          New Game <PlayIcon class="" />
-        </button>
+          New Game <PlayIcon />
+        </label>
       </template>
     </DrawerContent>
   </div>
@@ -167,21 +189,34 @@ import { defineComponent } from "vue";
 import {
   actionToString,
   Game,
+  MarkedSquaresScoreCondition,
+  NoMovesHighestScoreWinCondition,
+  NoMovesLowestScoreWinCondition,
+  NoMovesWinCondition,
   RandomPlayer,
+  TotalAreaScoreCondition,
   type Action,
   type Board,
   type Slice,
+  type SliceRestriction,
 } from "../model/BaseModel";
 import { NetworkPlayer } from "../model/Network";
 import { generateLoremIpsum } from "../model/StyleUtils";
 import { randomBoard, VisualPlayer, VisualState } from "../model/VisualModel";
 import DrawerContent from "./DrawerContent.vue";
 import GameDisplay from "./GameDisplay.vue";
-import { gameSetupStore, PlayerType } from "./GameSetupStore";
+import {
+  gameSetupStore,
+  PlayerType as PlayerTypeEnum,
+  ScoringSystem as ScoringSystemEnum,
+  SliceRestriction as SliceRestrictionEnum,
+  WinCondition as WinConditionEnum,
+} from "./GameSetupStore";
 import TabContent from "./TabContent.vue";
 import TabGroup from "./TabGroup.vue";
 import TurnIndicator, { PlayerState } from "./TurnIndicator.vue";
 import { io } from "socket.io-client";
+import RulesDescription from "./RulesDescription.vue";
 
 const backendUrl = import.meta.env.PUBLIC_BACKEND_URL;
 
@@ -207,6 +242,9 @@ if (!websocketPath) {
   throw new Error("PUBLIC_WEBSOCKET_PATH is not set");
 }
 
+const gameInfoDrawerId = "game-info-drawer";
+const gameSetupDrawerId = "game-setup-drawer";
+
 export default defineComponent({
   components: {
     PencilRulerIcon,
@@ -217,18 +255,33 @@ export default defineComponent({
     TabGroup,
     TabContent,
     TurnIndicator,
+    RulesDescription,
   },
   emits: {},
   data() {
     return {
-      PlayerType,
+      PlayerTypeEnum,
+      WinConditionEnum,
+      ScoringSystemEnum,
+      SliceRestriction: SliceRestrictionEnum,
       game: undefined as Game<VisualState> | undefined,
+      gameInfoDrawerId,
+      gameSetupDrawerId,
     };
   },
   setup() {
     const secondPlayerType = useVModel(gameSetupStore, "secondPlayerType");
     const randomPlayerDelay = useVModel(gameSetupStore, "randomPlayerDelay");
-    return { secondPlayerType, randomPlayerDelay };
+    const winCondition = useVModel(gameSetupStore, "winCondition");
+    const scoringSystem = useVModel(gameSetupStore, "scoringSystem");
+    const sliceRestriction = useVModel(gameSetupStore, "sliceRestriction");
+    return {
+      secondPlayerType,
+      randomPlayerDelay,
+      winCondition,
+      scoringSystem,
+      sliceRestriction,
+    };
   },
   mounted() {
     this.newGame();
@@ -317,7 +370,7 @@ export default defineComponent({
     },
     newGame() {
       const boards = [] as Board[];
-      const maxBoards = 5;
+      const maxBoards = 1;
       for (let i = 0; i < Math.floor(Math.random() * maxBoards + 1); i++) {
         boards.push(randomBoard());
       }
@@ -351,27 +404,67 @@ export default defineComponent({
       let secondPlayer;
 
       switch (this.secondPlayerType) {
-        case PlayerType.Random:
+        case PlayerTypeEnum.Random:
           secondPlayer = new RandomPlayer(
             1,
             "Random CPU",
             this.randomPlayerDelay
           );
           break;
-        case PlayerType.NetworkInitiator:
+        case PlayerTypeEnum.NetworkInitiator:
           secondPlayer = new NetworkPlayer("Network", 1);
           break;
-        case PlayerType.NetworkResponder:
+        case PlayerTypeEnum.NetworkResponder:
           throw new Error("Not implemented yet");
         default:
           throw new Error("Unknown player type");
+      }
+
+      let scoringConditions = [];
+      switch (this.scoringSystem) {
+        case ScoringSystemEnum.None:
+          break;
+        case ScoringSystemEnum.MarkedSquares:
+          scoringConditions.push(MarkedSquaresScoreCondition);
+          break;
+        case ScoringSystemEnum.TotalArea:
+          scoringConditions.push(TotalAreaScoreCondition);
+          break;
+        default:
+          throw new Error("Unknown scoring system");
+      }
+
+      let winConditions = [];
+      switch (this.winCondition) {
+        case WinConditionEnum.NoMovesLeft:
+          winConditions.push(NoMovesWinCondition);
+          break;
+        case WinConditionEnum.NoMovesHighestScore:
+          winConditions.push(NoMovesHighestScoreWinCondition);
+          break;
+        case WinConditionEnum.NoMovesLowestScore:
+          winConditions.push(NoMovesLowestScoreWinCondition);
+          break;
+        default:
+          throw new Error("Unknown win condition");
+      }
+
+      let sliceRestrictions: SliceRestriction[] = [];
+      switch (this.sliceRestriction) {
+        case SliceRestrictionEnum.None:
+          break;
+        default:
+          throw new Error("Unknown slice restriction");
       }
 
       this.game = new Game<VisualState>(
         new VisualState(
           [visualPlayer.info, secondPlayer.info],
           boards,
-          actionCallback
+          actionCallback,
+          winConditions,
+          scoringConditions,
+          sliceRestrictions
         ),
         [visualPlayer, secondPlayer]
       );

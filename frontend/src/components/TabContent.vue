@@ -26,7 +26,10 @@ export default defineComponent({
     :aria-label="tabName"
     :checked="isActive"
   />
-  <div class="tab-content"><slot /></div>
+  <div class="tab-content">
+    <div class="divider m-2" />
+    <slot />
+  </div>
 </template>
 
 <style scoped></style>

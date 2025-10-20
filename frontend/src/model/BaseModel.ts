@@ -159,7 +159,15 @@ export interface Turn {
   action: Action;
 }
 
-export interface WinCondition<TState extends BaseState> {
+export interface Rule {
+  name: string;
+  description: string;
+  condition: Function;
+}
+
+export interface WinCondition<TState extends BaseState> extends Rule {
+  // A win condition determines if the game is over, and if it is, who the
+  // winner is (or winners, in case of multiple, such as a tie).
   condition: (state: TState) => PlayerInfo[] | null; // Returns the info of the winning player, or null if no winner yet
 }
 
@@ -172,7 +180,120 @@ export const NoMovesWinCondition: WinCondition<BaseState> = {
     }
     return null;
   },
+  name: "No Moves Left",
+  description:
+    "The game ends when a player has no valid moves available. The other player wins.",
 };
+
+export const NoMovesHighestScoreWinCondition: WinCondition<BaseState> = {
+  condition: (state: BaseState): PlayerInfo[] | null => {
+    // If a player has no valid moves, the game ends and the player with the
+    // highest score wins. If multiple players have the highest score, they all
+    // win (tie).
+    const availableActions = state.availableActions;
+
+    if (availableActions.length === 0) {
+      let highestScore = -Infinity;
+      for (const player of state.players) {
+        const playerScore = state.scores[player.uuid] || 0;
+        if (playerScore > highestScore) {
+          highestScore = playerScore;
+        }
+      }
+      const winners: PlayerInfo[] = [];
+      for (const player of state.players) {
+        const playerScore = state.scores[player.uuid] || 0;
+        if (playerScore === highestScore) {
+          winners.push(player);
+        }
+      }
+      return winners;
+    }
+    return null;
+  },
+  name: "No Moves Highest Score",
+  description:
+    "The game ends when a player has no valid moves available. The player with the highest score wins.",
+};
+
+export const NoMovesLowestScoreWinCondition: WinCondition<BaseState> = {
+  condition: (state: BaseState): PlayerInfo[] | null => {
+    // If a player has no valid moves, the game ends and the player with the
+    // lowest score wins. If multiple players have the lowest score, they all
+    // win (tie).
+    const availableActions = state.availableActions;
+    if (availableActions.length === 0) {
+      let lowestScore = Infinity;
+      const winners: PlayerInfo[] = [];
+      for (const player of state.players) {
+        const playerScore = state.scores[player.uuid] || 0;
+        if (playerScore < lowestScore) {
+          lowestScore = playerScore;
+          winners.length = 0; // Clear previous winners
+          winners.push(player);
+        } else if (playerScore === lowestScore) {
+          winners.push(player);
+        }
+      }
+      return winners;
+    }
+    return null;
+  },
+  name: "No Moves Lowest Score",
+  description:
+    "The game ends when a player has no valid moves available. The player with the lowest score wins.",
+};
+
+export interface ScoreCondition extends Rule {
+  // A score condition determines if a slice results in points being awarded to
+  // a player, and if so, how many points.
+  condition: (turnResult: TurnResult) => Map<string, number> | undefined; // Returns a map of PlayerInfo.uuid to score change, or undefined if no score change
+}
+
+export const MarkedSquaresScoreCondition: ScoreCondition = {
+  condition: (turnResult: TurnResult): Map<string, number> | undefined => {
+    // Awards points to the player for each marked square removed from the board
+    const scoreChanges = new Map<string, number>();
+    const playerUuid = turnResult.turn.player.uuid;
+    let points = 0;
+    for (const removedBoard of turnResult.sliceResult.removedBoards) {
+      points += removedBoard.markedCoordinates.length;
+    }
+    if (points > 0) {
+      scoreChanges.set(playerUuid, points);
+      return scoreChanges;
+    }
+    return undefined;
+  },
+  name: "Marked Squares",
+  description:
+    "Points are awarded for each marked square removed from the board.",
+};
+
+export const TotalAreaScoreCondition: ScoreCondition = {
+  condition: (turnResult: TurnResult): Map<string, number> | undefined => {
+    // Awards points to the player for the total area of the removed boards
+    const scoreChanges = new Map<string, number>();
+    const playerUuid = turnResult.turn.player.uuid;
+    let totalArea = 0;
+    for (const removedBoard of turnResult.sliceResult.removedBoards) {
+      totalArea +=
+        removedBoard.dimensions.width * removedBoard.dimensions.height;
+    }
+    if (totalArea > 0) {
+      scoreChanges.set(playerUuid, totalArea);
+      return scoreChanges;
+    }
+    return undefined;
+  },
+  name: "Total Area",
+  description: "Points are awarded for the total area of the removed boards.",
+};
+
+export interface SliceRestriction {
+  // A restriction on where a slice can be made.
+  isValidSlice: (state: BaseState, slice: Slice) => boolean;
+}
 
 export interface TurnResult {
   turn: Turn;
@@ -187,6 +308,7 @@ export interface SliceResult {
     childBoard: Board | null; // The right or bottom of the sliced board. Will be null if this part of the board was removed due to not having any marked coordinates.
   };
   removedBoards: Board[]; // Will all have either zero marked coordinates, or be a single 1x1 board that is marked
+  scoreChanges?: Record<string, number>; // Keyed by PlayerInfo.uuid
 }
 
 export function sliceBoard(board: Board, slice: Slice): SliceResult | null {
@@ -297,15 +419,20 @@ export abstract class BaseState {
   // serializability. This applies to non-abstract subclasses of BaseState as
   // well.
 
-  boards: Record<string, Board>; // Keyed by UUID
+  boards: Record<string, Board>; // Keyed by Board.uuid
   players: PlayerInfo[]; // Players should be sorted by their turnRemainder, should equal index
+  scores: Record<string, number> = {}; // Keyed by PlayerInfo.uuid
   turnHistory: Turn[];
   winConditions: WinCondition<BaseState>[];
+  scoreConditions: ScoreCondition[];
+  sliceRestrictions: SliceRestriction[];
 
   constructor(
     players: PlayerInfo[],
     boards: Board[],
-    winConditions: WinCondition<BaseState>[]
+    winConditions: WinCondition<BaseState>[],
+    scoreConditions: ScoreCondition[],
+    sliceRestrictions: SliceRestriction[]
   ) {
     this.boards = boards.reduce((acc, board) => {
       acc[board.uuid] = board;
@@ -314,7 +441,13 @@ export abstract class BaseState {
     this.players = players;
     this.players.sort((a, b) => a.turnRemainder - b.turnRemainder);
     this.winConditions = winConditions;
+    this.scoreConditions = scoreConditions;
+    this.sliceRestrictions = sliceRestrictions;
     this.turnHistory = [];
+    this.scores = {};
+    for (const player of players) {
+      this.scores[player.uuid] = 0;
+    }
   }
 
   // This method is called after each turn is played, and can be used to
@@ -415,6 +548,24 @@ export class Game<TState extends BaseState> {
       outState: stateCopy,
       sliceResult,
     };
+
+    const scoreChanges: Record<string, number> = {};
+    for (const scoreCondition of this.state.scoreConditions) {
+      const result = scoreCondition.condition(turnResult);
+      if (result) {
+        for (const [playerUuid, scoreChange] of result.entries()) {
+          if (!scoreChanges[playerUuid]) {
+            scoreChanges[playerUuid] = 0;
+          }
+          scoreChanges[playerUuid] += scoreChange;
+        }
+      }
+    }
+
+    for (const [playerUuid, scoreChange] of Object.entries(scoreChanges)) {
+      stateCopy.scores[playerUuid] += scoreChange;
+    }
+
     stateCopy.postTurnUpdate(turnResult);
 
     return stateCopy;

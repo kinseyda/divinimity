@@ -7,9 +7,12 @@ import {
   type Action,
   type Board,
   type PlayerInfo,
+  type ScoreCondition,
   type Slice,
+  type SliceRestriction,
   type TileCoordinate,
   type TurnResult,
+  type WinCondition,
 } from "./BaseModel";
 
 import paper from "paper";
@@ -376,9 +379,12 @@ export class VisualState extends BaseState {
   constructor(
     players: PlayerInfo[],
     boards: Board[],
-    actionCallback: (slice: Slice, board: Board) => void
+    actionCallback: (slice: Slice, board: Board) => void,
+    winConditions: WinCondition<BaseState>[],
+    scoreConditions: ScoreCondition[],
+    sliceRestrictions: SliceRestriction[]
   ) {
-    super(players, boards, [NoMovesWinCondition]);
+    super(players, boards, winConditions, scoreConditions, sliceRestrictions);
     this.actionCallBack = actionCallback;
     // Board positions are initialized at -1,-1 for all boards here since we
     // don't know the canvas dimensions. They will be updated later to be

@@ -16,7 +16,7 @@ export default defineComponent({
 </script>
 <template>
   <div class="tabs tabs-border tabs-xl size-full">
-    <slot></slot>
+    <slot />
   </div>
 </template>
 

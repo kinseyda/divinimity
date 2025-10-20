@@ -1,5 +1,7 @@
 <template>
-  <canvas ref="paperCanvas" resize />
+  <div ref="paperCanvasContainer" class="size-full relative">
+    <canvas ref="paperCanvas" resize class="absolute inset-0" />
+  </div>
 </template>
 
 <script lang="ts">
@@ -12,13 +14,6 @@ export default defineComponent({
     return {};
   },
   props: {
-    // Point of using Vue here is so that we can pass a function that will be
-    // called to redraw the canvas, Astro can only do this by serializing the
-    // function
-    // (https://docs.astro.build/en/guides/framework-components/#passing-props-to-framework-components)
-    // Side effect of this is that we can only use Vue components down stream of
-    // here and everything will be hydrated, defeating the purpose of Astro a
-    // little bit, but alas.
     redrawFunction: {
       type: Function, // Expects type (event: RedrawEvent, project: paper.Project, view: paper.View) => void
       required: true,

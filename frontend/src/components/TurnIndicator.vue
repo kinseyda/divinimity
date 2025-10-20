@@ -41,7 +41,7 @@ export default defineComponent({
     "
     class="alert shadow-xl"
   >
-    <div class="flex flex-col">
+    <div class="flex flex-col *:text-xs md:*:text-base">
       <div v-if="playerState === PlayerState.GameNotStarted">
         Game not started
       </div>

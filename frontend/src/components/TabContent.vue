@@ -27,7 +27,7 @@ export default defineComponent({
     :checked="isActive"
   />
   <div class="tab-content">
-    <div class="divider m-2" />
+    <div class="divider p-2 -m-2" />
     <slot />
   </div>
 </template>

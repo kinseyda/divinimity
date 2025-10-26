@@ -12,7 +12,7 @@ import PaperCanvasFull from "./PaperCanvasFull.vue";
 import { MoveIcon } from "lucide-vue-next";
 import paper from "paper";
 import { defineComponent } from "vue";
-import { Direction, Game } from "../model/BaseModel";
+import { Game } from "../model/BaseModel";
 import { getDaisyUIColors } from "../model/StyleUtils";
 import {
   PaperBoard,
@@ -25,6 +25,7 @@ import {
 } from "../model/VisualModel";
 import TurnIndicator, { PlayerState } from "./TurnIndicator.vue";
 import ScoreDisplay from "./ScoreDisplay.vue";
+import { Direction } from "../../../shared";
 
 function placeAroundCenter(
   boards: PaperBoard[],
@@ -655,7 +656,7 @@ export default defineComponent({
     :playerState="getPlayerState()"
   />
   <ScoreDisplay
-    v-if="interactive && game.state.scoreConditions.length > 0"
+    v-if="interactive && game.scoreConditions.length > 0"
     class="alert absolute left-1/2 -translate-x-1/2 bottom-4 pointer-events-none"
     :gameState="game.state"
   />

@@ -4,5 +4,6 @@
   "exclude": ["dist", "node_modules"],
   "compilerOptions": {
     "jsx": "preserve"
-  }
+  },
+  "references": [{ "path": "../shared" }]
 }

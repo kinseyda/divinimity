@@ -1,37 +1,17 @@
-export enum Direction {
-  Horizontal,
-  Vertical,
-}
-
-export interface Slice {
-  // A slice is a single cut along a grid line, between two rows or two columns
-  // of tiles. It is defined by its direction (horizontal or vertical) and the
-  // line it cuts through (either a row or a column). The line number is an
-  // index, either the x or y from the coordinate you slice at. Therefore, the
-  // slice is between line and line - 1. So, a valid slice must have a line
-  // number greater than one (otherwise you would be slicing the border of the
-  // board).
-  direction: Direction;
-  line: number;
-}
+import {
+  Direction,
+  type Action,
+  type Board,
+  type BoardDimensions,
+  type PlayerInfo,
+  type Slice,
+  type TileCoordinate,
+  type Turn,
+} from "../../../shared";
 
 export function tileCoordinateToString(coord: TileCoordinate): string {
   return `(${coord.x}, ${coord.y})`;
 }
-
-export interface TileCoordinate {
-  // Coordinates start from the top-left corner (0, 0), like pixels, not like
-  // regular cartesian coordinates.
-  x: number;
-  y: number;
-}
-
-export interface PlayerInfo {
-  uuid: string;
-  name: string;
-  turnRemainder: number; // The player's turn is when (turn number % player count) == turn modulo
-}
-
 export class Player<TState extends BaseState> {
   info: PlayerInfo;
 
@@ -57,19 +37,6 @@ export class Player<TState extends BaseState> {
   public async getAction(state: TState): Promise<Action> {
     return this.getActionCallback(state);
   }
-}
-
-export interface BoardDimensions {
-  width: number;
-  height: number;
-}
-
-export interface Board {
-  // In Divinim, a board is a grid of tiles arranged in rows and columns. Some
-  // coordinates are "marked" / "poisoned".
-  dimensions: BoardDimensions;
-  markedCoordinates: TileCoordinate[];
-  uuid: string;
 }
 
 /**
@@ -147,16 +114,6 @@ export function actionToString(action: Action): string {
   return `${dir}${action.slice.line} / ${boardHash(action.board)} {${
     action.board.uuid
   }}`;
-}
-
-export interface Action {
-  slice: Slice;
-  board: Board;
-}
-
-export interface Turn {
-  player: PlayerInfo;
-  action: Action;
 }
 
 export interface Rule {
@@ -290,11 +247,6 @@ export const TotalAreaScoreCondition: ScoreCondition = {
   description: "Points are awarded for the total area of the removed boards.",
 };
 
-export interface SliceRestriction {
-  // A restriction on where a slice can be made.
-  isValidSlice: (state: BaseState, slice: Slice) => boolean;
-}
-
 export interface TurnResult {
   turn: Turn;
   inState: BaseState;
@@ -423,26 +375,14 @@ export abstract class BaseState {
   players: PlayerInfo[]; // Players should be sorted by their turnRemainder, should equal index
   scores: Record<string, number> = {}; // Keyed by PlayerInfo.uuid
   turnHistory: Turn[];
-  winConditions: WinCondition<BaseState>[];
-  scoreConditions: ScoreCondition[];
-  sliceRestrictions: SliceRestriction[];
 
-  constructor(
-    players: PlayerInfo[],
-    boards: Board[],
-    winConditions: WinCondition<BaseState>[],
-    scoreConditions: ScoreCondition[],
-    sliceRestrictions: SliceRestriction[]
-  ) {
+  constructor(players: PlayerInfo[], boards: Board[]) {
     this.boards = boards.reduce((acc, board) => {
       acc[board.uuid] = board;
       return acc;
     }, {} as Record<string, Board>);
     this.players = players;
     this.players.sort((a, b) => a.turnRemainder - b.turnRemainder);
-    this.winConditions = winConditions;
-    this.scoreConditions = scoreConditions;
-    this.sliceRestrictions = sliceRestrictions;
     this.turnHistory = [];
     this.scores = {};
     for (const player of players) {
@@ -497,18 +437,47 @@ export class Game<TState extends BaseState> {
   state: TState;
   players: Player<TState>[];
   // Players should be sorted by their turnRemainder
+  winConditions: WinCondition<BaseState>[];
+  scoreConditions: ScoreCondition[];
 
-  constructor(initialState: TState, players: Player<TState>[]) {
+  constructor(
+    initialState: TState,
+    players: Player<TState>[],
+    winConditions: WinCondition<BaseState>[],
+    scoreConditions: ScoreCondition[]
+  ) {
     this.state = initialState;
     this.players = players;
     this.players.sort((a, b) => a.info.turnRemainder - b.info.turnRemainder);
+    this.winConditions = winConditions;
+    this.scoreConditions = scoreConditions;
   }
 
+  get availableActions(): Action[] {
+    // For each board, a slice can be made between any two tiles, or
+    // equivalently between any two rows or columns.
+    const actions: Action[] = [];
+    for (const board of Object.values(this.state.boards)) {
+      for (let x = 1; x < board.dimensions.width; x++) {
+        actions.push({
+          slice: { direction: Direction.Vertical, line: x },
+          board: board,
+        });
+      }
+      for (let y = 1; y < board.dimensions.height; y++) {
+        actions.push({
+          slice: { direction: Direction.Horizontal, line: y },
+          board: board,
+        });
+      }
+    }
+    return actions;
+  }
   public get winners(): PlayerInfo[] {
     // Returns the info of the winning players, or an empty array if no winner
     // yet
     const winners: PlayerInfo[] = [];
-    for (const winCondition of this.state.winConditions) {
+    for (const winCondition of this.winConditions) {
       const result = winCondition.condition(this.state);
       if (result) {
         winners.push(...result);
@@ -550,7 +519,7 @@ export class Game<TState extends BaseState> {
     };
 
     const scoreChanges: Record<string, number> = {};
-    for (const scoreCondition of this.state.scoreConditions) {
+    for (const scoreCondition of this.scoreConditions) {
       const result = scoreCondition.condition(turnResult);
       if (result) {
         for (const [playerUuid, scoreChange] of result.entries()) {

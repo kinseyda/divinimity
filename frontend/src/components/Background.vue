@@ -1,6 +1,7 @@
 <script lang="ts">
+// Background component that demos a random game being played out on a loop
 import { defineComponent } from "vue";
-import { Game, RandomPlayer } from "../model/BaseModel";
+import { Game, NoMovesWinCondition, RandomPlayer } from "../model/BaseModel";
 import { randomBoard, VisualState } from "../model/VisualModel";
 import "../styles/global.css";
 import GameDisplay from "./GameDisplay.vue";
@@ -27,7 +28,9 @@ export default defineComponent({
           boards,
           () => {}
         ),
-        [randomPlayer1, randomPlayer2]
+        [randomPlayer1, randomPlayer2],
+        [NoMovesWinCondition],
+        []
       );
       this.game = game;
       game.playLoop().then(() => {

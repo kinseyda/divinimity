@@ -1,6 +1,6 @@
 <script lang="ts">
 import { defineComponent, type PropType } from "vue";
-import { BaseState, type PlayerInfo } from "../model/BaseModel";
+import { BaseState } from "../model/BaseModel";
 
 export default defineComponent({
   components: {},

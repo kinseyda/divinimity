@@ -1,10 +1,10 @@
-import { BaseState, Player, type Action } from "./BaseModel";
-
-function generateConnectionId(): string {
-  // Simple function to generate a random connection ID
-  // Connection IDs are 6 lowercase letters.
-  return Math.random().toString(36).substring(2, 8);
-}
+import type { Socket } from "socket.io-client";
+import {
+  type Action,
+  type PlayerInfo,
+  type SessionInfo,
+} from "../../../shared";
+import { BaseState, Player } from "./BaseModel";
 
 async function updateNetworkAndGetAction(
   state: BaseState,
@@ -17,15 +17,14 @@ async function updateNetworkAndGetAction(
 }
 
 export class NetworkPlayer extends Player<BaseState> {
-  connectionId: string;
+  session: SessionInfo;
+  playerInfo: PlayerInfo;
 
-  constructor(name: string, turnRemainder: number) {
-    const connectionId = generateConnectionId();
-    super(name, turnRemainder, (state: BaseState) =>
-      updateNetworkAndGetAction(state, this.connectionId)
+  constructor(playerInfo: PlayerInfo, session: SessionInfo) {
+    super(playerInfo.name, playerInfo.turnRemainder, (state) =>
+      updateNetworkAndGetAction(state, session.id)
     );
-    this.connectionId = connectionId;
+    this.playerInfo = playerInfo;
+    this.session = session;
   }
 }
-
-

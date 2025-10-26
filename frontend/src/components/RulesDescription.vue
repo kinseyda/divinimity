@@ -1,12 +1,20 @@
 <script lang="ts">
 import { defineComponent, type PropType } from "vue";
-import type { BaseState } from "../model/BaseModel";
+import type {
+  BaseState,
+  ScoreCondition,
+  WinCondition,
+} from "../model/BaseModel";
 
 export default defineComponent({
   components: {},
   props: {
-    gameState: {
-      type: Object as PropType<BaseState>,
+    winConditions: {
+      type: Array as PropType<WinCondition<BaseState>[]>,
+      required: true,
+    },
+    scoreConditions: {
+      type: Array as PropType<ScoreCondition[]>,
       required: true,
     },
   },
@@ -21,29 +29,29 @@ export default defineComponent({
 });
 </script>
 <template>
-  <span>Current Game Rules:</span>
+  <span class="font-bold text-lg">Current Game Rules:</span>
   <ul>
     <li>
-      Win condition: {{ gameState.winConditions[0].name }}
+      Win condition: {{ winConditions[0].name }}
       <ul>
         <li>
-          {{ gameState.winConditions[0].description }}
+          {{ winConditions[0].description }}
         </li>
       </ul>
     </li>
-    <li v-if="gameState.scoreConditions.length > 0">
-      Scoring: {{ gameState.scoreConditions[0].name }}
+    <li v-if="scoreConditions.length > 0">
+      Scoring: {{ scoreConditions[0].name }}
       <ul>
         <li>
-          {{ gameState.scoreConditions[0].description }}
+          {{ scoreConditions[0].description }}
         </li>
       </ul>
     </li>
     <li v-else>Scoring: None</li>
   </ul>
   <span class="divider" />
+  <span class="font-bold text-lg">Game Controls:</span>
   <span>Slice boards by clicking and dragging</span>
-  <span>Last player to take a turn wins</span>
   <span>
     Rearrange boards by holding
     <kbd class="kbd kbd-xs">Shift</kbd> or using the on-screen toggle button,

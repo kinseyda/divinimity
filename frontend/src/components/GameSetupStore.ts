@@ -14,10 +14,6 @@ export enum ScoringSystem {
   TotalArea = "Total Area",
 }
 
-export enum SliceRestriction {
-  None = "No Restrictions",
-}
-
 export enum WinCondition {
   NoMovesLeft = "No Moves Left",
   NoMovesHighestScore = "No Moves - Highest Score Wins",
@@ -29,7 +25,7 @@ export type GameSetupOptions = {
   randomPlayerDelay: number;
   winCondition: WinCondition;
   scoringSystem: ScoringSystem;
-  sliceRestriction: SliceRestriction;
+  sessionId: string | null;
 };
 
 export const gameSetupStore = persistentMap<GameSetupOptions>(
@@ -39,7 +35,7 @@ export const gameSetupStore = persistentMap<GameSetupOptions>(
     randomPlayerDelay: 1000,
     winCondition: WinCondition.NoMovesLeft,
     scoringSystem: ScoringSystem.None,
-    sliceRestriction: SliceRestriction.None,
+    sessionId: null,
   },
   {
     encode: JSON.stringify,
@@ -52,5 +48,5 @@ const gameSetupValidation = z.object({
   randomPlayerDelay: z.number().min(0).max(10000),
   winCondition: z.nativeEnum(WinCondition),
   scoringSystem: z.nativeEnum(ScoringSystem),
-  sliceRestriction: z.nativeEnum(SliceRestriction),
+  sessionId: z.string().nullable(),
 });

@@ -157,7 +157,7 @@
             >
               <legend class="fieldset-legend">Session Info</legend>
               <!-- For debugging -->
-              {{ session }}
+              session: {{ session }}, socket: {{ socket?.id }}
             </fieldset>
           </TabContent>
           <TabContent groupName="setupTabs" tabName="Rules">
@@ -214,26 +214,25 @@ import {
 import { io, Socket } from "socket.io-client";
 import { defineComponent } from "vue";
 import {
+  ClientToClientMessageType,
+  ClientToServerMessageType,
   ScoreCondition,
-  ServerToClientSocketEvents,
+  ServerToClientMessageType,
   WinCondition,
   type Action,
   type Board,
+  type ClientToServerMessage,
   type JoinSessionData,
+  type NewGameData,
+  type NewGameMessage,
+  type ServerToClientMessage,
+  type ServerToClientMessageData,
   type SessionInfo,
   type Slice,
   type StartSessionData,
+  type TurnMessage,
 } from "../../../shared";
-import {
-  actionToString,
-  Game,
-  MarkedSquaresScoreCondition,
-  NoMovesHighestScoreWinCondition,
-  NoMovesLowestScoreWinCondition,
-  NoMovesWinCondition,
-  RandomPlayer,
-  TotalAreaScoreCondition,
-} from "../model/BaseModel";
+import { actionToString, Game, RandomPlayer } from "../model/BaseModel";
 import { NetworkPlayer } from "../model/Network";
 import { generateLoremIpsum } from "../model/StyleUtils";
 import { randomBoard, VisualPlayer, VisualState } from "../model/VisualModel";
@@ -321,6 +320,11 @@ export default defineComponent({
     this.newSession();
     this.newGame();
   },
+  computed: {
+    sessionReady(): boolean {
+      return this.session !== undefined && this.session.players.length > 1;
+    },
+  },
   methods: {
     generateLoremIpsum(words: number): string {
       return generateLoremIpsum(words);
@@ -403,6 +407,7 @@ export default defineComponent({
         console.log("Closed connection");
       }, 1000);
     },
+
     newSession() {
       console.log("Creating a new session");
       const socket = io(websocketUrl, {
@@ -428,67 +433,121 @@ export default defineComponent({
                 : WinCondition.LowestScore,
             scoreCondition:
               this.scoringSystem == UUIScoringSystemEnum.None
-                ? ScoreCondition.None
+                ? undefined
                 : this.scoringSystem == UUIScoringSystemEnum.MarkedSquares
                 ? ScoreCondition.MarkedSquares
                 : ScoreCondition.TotalArea,
           },
         };
-        socket.emit("start-session", startSessionData); // Request server start a session
+        const startSessionMessage: ClientToServerMessage = {
+          type: ClientToServerMessageType.StartSession,
+          data: startSessionData,
+        };
+        socket.emit(
+          ClientToServerMessageType.StartSession,
+          startSessionMessage
+        ); // Request server start a session
       });
       socket.on("disconnect", () => {
         console.log("Disconnected from multiplayer server");
         this.socket = undefined;
       });
       socket.on(
-        ServerToClientSocketEvents.SESSION_STARTED,
-        (session: SessionInfo) => {
+        ServerToClientMessageType.StartSuccess,
+        (msg: ServerToClientMessage) => {
           // Respond to the session started below
-          console.log("Session started:", session);
-          this.session = session;
+          console.log("Session started:", msg);
+          this.session = (msg.data as ServerToClientMessageData).session;
         }
       );
       socket.on(
-        ServerToClientSocketEvents.SESSION_UPDATED,
-        (session: SessionInfo) => {
-          // Respond to the session updated below
-          console.log("Session updated:", session);
-          this.session = session;
+        ServerToClientMessageType.StartFailure,
+        (msg: ServerToClientMessage) => {
+          console.log("Session failed:", msg);
         }
       );
+      socket.on(
+        ServerToClientMessageType.SessionUpdated,
+        (msg: ServerToClientMessage) => {
+          console.log("Session updated:", msg);
+          this.session = (msg.data as ServerToClientMessageData).session;
+        }
+      );
+      this.attachClientToClientHandlers();
     },
     joinSession(sessionId: string) {
-      console.log("Joining session with ID", sessionId);
+      console.log("Joining session with ID:", sessionId);
+
+      if (this.socket) {
+        this.socket.close();
+        this.socket = undefined;
+      }
+
       const socket = io(websocketUrl, {
         path: websocketPath,
         transports: ["websocket"],
       });
+      this.socket = socket;
+
       socket.on("connect", () => {
         console.log("Connected to multiplayer server with id", socket.id);
         this.socket = socket;
         // Send join session request
         const joinSessionData: JoinSessionData = {
-          sessionId,
+          sessionId: sessionId,
           playerInfo: {
             uuid: "player-" + Math.random().toString(36).substring(2, 15),
             name: "Joining Player",
             turnRemainder: 1,
           },
         };
-        socket.emit("join-session", joinSessionData); // Request server to join a session
+        const joinSessionMessage: ClientToServerMessage = {
+          type: ClientToServerMessageType.JoinSession,
+          data: joinSessionData,
+        };
+        socket.emit(ClientToServerMessageType.JoinSession, joinSessionMessage); // Request server to join a session
       });
       socket.on("disconnect", () => {
         console.log("Disconnected from multiplayer server");
         this.socket = undefined;
       });
       socket.on(
-        ServerToClientSocketEvents.SESSION_UPDATED,
-        (session: SessionInfo) => {
-          // Respond to the session updated below
-          console.log("Session updated:", session);
-          this.session = session;
+        ServerToClientMessageType.JoinSuccess,
+        (msg: ServerToClientMessage) => {
+          // Respond to the session joined below
+          console.log("Session joined:", msg);
+          this.session = (msg.data as ServerToClientMessageData).session;
         }
       );
+      this.attachClientToClientHandlers();
+    },
+    attachClientToClientHandlers() {
+      if (!this.socket) return;
+      this.socket.on(
+        ClientToClientMessageType.NewGame,
+        (msg: NewGameMessage) => {
+          console.log("New game message:", msg);
+          const { boards, ruleset } = msg.data;
+          // Set the setup according to the received ruleset
+          this.winCondition =
+            ruleset.winCondition === WinCondition.NoMovesLeft
+              ? UIWinConditionEnum.NoMovesLeft
+              : ruleset.winCondition === WinCondition.HighestScore
+              ? UIWinConditionEnum.NoMovesHighestScore
+              : UIWinConditionEnum.NoMovesLowestScore;
+          this.scoringSystem =
+            ruleset.scoreCondition === undefined
+              ? UUIScoringSystemEnum.None
+              : ruleset.scoreCondition === ScoreCondition.MarkedSquares
+              ? UUIScoringSystemEnum.MarkedSquares
+              : UUIScoringSystemEnum.TotalArea;
+			
+          this.newGameWithBoards(boards);
+        }
+      );
+      this.socket.on(ClientToClientMessageType.Turn, (msg: TurnMessage) => {
+        console.log("Player turn message:", msg);
+      });
     },
     writeSessionIDToClipboard() {
       if (this.session) {
@@ -500,13 +559,7 @@ export default defineComponent({
         );
       }
     },
-    newGame() {
-      const boards = [] as Board[];
-      const maxBoards = 1;
-      for (let i = 0; i < Math.floor(Math.random() * maxBoards + 1); i++) {
-        boards.push(randomBoard());
-      }
-
+    newGameWithBoards(boards: Board[]) {
       // We'll use a Promise and its resolver to "pipe" between getActionCallback
       // and actionCallback. When getActionCallback is called, it returns a
       // Promise<Action> and stores its resolver. When actionCallback is called
@@ -514,8 +567,8 @@ export default defineComponent({
 
       let resolveAction: ((action: Action) => void) | null = null;
 
-      // The actionCallback will be called inside the slice tool's onMouseDown
-      // function. It shall resolve the getActionCallback promise
+      // The actionCallback will be called inside the slice tool's onMouseDown /
+      // onMouseUp functions. It shall resolve the getActionCallback promise
       const actionCallback = (slice: Slice, board: Board) => {
         if (resolveAction) {
           resolveAction({ slice, board });
@@ -574,10 +627,10 @@ export default defineComponent({
         case UUIScoringSystemEnum.None:
           break;
         case UUIScoringSystemEnum.MarkedSquares:
-          scoringConditions.push(MarkedSquaresScoreCondition);
+          scoringConditions.push(ScoreCondition.MarkedSquares);
           break;
         case UUIScoringSystemEnum.TotalArea:
-          scoringConditions.push(TotalAreaScoreCondition);
+          scoringConditions.push(ScoreCondition.TotalArea);
           break;
         default:
           throw new Error("Unknown scoring system");
@@ -586,13 +639,13 @@ export default defineComponent({
       let winConditions = [];
       switch (this.winCondition) {
         case UIWinConditionEnum.NoMovesLeft:
-          winConditions.push(NoMovesWinCondition);
+          winConditions.push(WinCondition.NoMovesLeft);
           break;
         case UIWinConditionEnum.NoMovesHighestScore:
-          winConditions.push(NoMovesHighestScoreWinCondition);
+          winConditions.push(WinCondition.HighestScore);
           break;
         case UIWinConditionEnum.NoMovesLowestScore:
-          winConditions.push(NoMovesLowestScoreWinCondition);
+          winConditions.push(WinCondition.LowestScore);
           break;
         default:
           throw new Error("Unknown win condition");
@@ -607,7 +660,42 @@ export default defineComponent({
         winConditions,
         scoringConditions
       );
+      if (this.sessionReady) {
+        const newGameMessageData: NewGameData = {
+          ruleset: {
+            winCondition:
+              this.winCondition == UIWinConditionEnum.NoMovesLeft
+                ? WinCondition.NoMovesLeft
+                : this.winCondition == UIWinConditionEnum.NoMovesHighestScore
+                ? WinCondition.HighestScore
+                : WinCondition.LowestScore,
+            scoreCondition:
+              this.scoringSystem == UUIScoringSystemEnum.None
+                ? undefined
+                : this.scoringSystem == UUIScoringSystemEnum.MarkedSquares
+                ? ScoreCondition.MarkedSquares
+                : ScoreCondition.TotalArea,
+          },
+          boards: boards,
+        };
+        const newGameMessage: NewGameMessage = {
+          type: ClientToClientMessageType.NewGame,
+          data: newGameMessageData,
+          sessionId: this.session!.id,
+        };
+        console.log("Emitting new game message:", newGameMessage);
+        this.socket?.emit(ClientToClientMessageType.NewGame, newGameMessage);
+      }
       this.game.playLoop();
+    },
+    newGame() {
+      const boards = [] as Board[];
+      const maxBoards = 1;
+      for (let i = 0; i < Math.floor(Math.random() * maxBoards + 1); i++) {
+        boards.push(randomBoard());
+      }
+
+      this.newGameWithBoards(boards);
     },
   },
 });

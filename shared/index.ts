@@ -1,22 +1,69 @@
-export enum ClientToServerSocketEvents {
-  CONNECTION = "connection",
-  DISCONNECT = "disconnect",
-  START_SESSION = "start-session",
-  JOIN_SESSION = "join-session",
-  TURN = "turn",
-  NEW_GAME = "new-game",
+// Clients communicate essentially peer to peer, with the server acting as a
+// simple mirror once a session is established.
+
+export enum ClientToServerMessageType {
+  StartSession = "start-session",
+  JoinSession = "join-session",
+}
+export enum ServerToClientMessageType {
+  JoinSuccess = "session-joined",
+  JoinFailure = "session-join-failure",
+  StartSuccess = "session-started",
+  StartFailure = "session-start-failure",
+  SessionUpdated = "session-updated",
+  // May add more if the server does validation for turns for example.
+}
+export enum ClientToClientMessageType {
+  // These messages are sent between clients via the server not literally peer to
+  // peer.
+  Turn = "turn",
+  NewGame = "new-game",
 }
 
-export enum ServerToClientSocketEvents {
-  SESSION_STARTED = "session-started",
-  SESSION_UPDATED = "session-updated",
+export interface ServerToClientMessage {
+  type: ServerToClientMessageType;
+  data: ServerToClientMessageData | string; // string for error messages
 }
+
+export interface ClientToServerMessage {
+  type: ClientToServerMessageType;
+  data: StartSessionData | JoinSessionData;
+}
+
+export interface StartSessionMessage extends ClientToServerMessage {
+  type: ClientToServerMessageType.StartSession;
+  data: StartSessionData;
+}
+
+export interface JoinSessionMessage extends ClientToServerMessage {
+  type: ClientToServerMessageType.JoinSession;
+  data: JoinSessionData;
+}
+
+export interface ClientToClientMessage {
+  type: ClientToClientMessageType;
+  sessionId: string;
+  data: TurnData | NewGameData;
+}
+
+export interface TurnMessage extends ClientToClientMessage {
+  type: ClientToClientMessageType.Turn;
+  data: TurnData;
+}
+
+export interface NewGameMessage extends ClientToClientMessage {
+  type: ClientToClientMessageType.NewGame;
+  data: NewGameData;
+}
+
+export interface NewGameData {
+	ruleset: Ruleset;
+	boards: Board[];
+}
+
 export interface SessionInfo {
   id: string;
   lastUpdated: number;
-  turns?: Turn[];
-  startingBoard?: Board;
-  ruleset: Ruleset;
   players: PlayerInfo[];
 }
 
@@ -27,18 +74,16 @@ export enum WinCondition {
 }
 
 export enum ScoreCondition {
-  None,
   MarkedSquares,
   TotalArea,
 }
 
 export interface Ruleset {
   winCondition: WinCondition;
-  scoreCondition: ScoreCondition;
+  scoreCondition?: ScoreCondition;
 }
 
-export interface ServerMessageData {
-  sessionId: string;
+export interface ServerToClientMessageData {
   session: SessionInfo;
 }
 

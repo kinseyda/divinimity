@@ -7,6 +7,8 @@ import {
   type Slice,
   type TileCoordinate,
   type Turn,
+  WinCondition as WinConditionEnum,
+  ScoreCondition as ScoreConditionEnum,
 } from "../../../shared";
 
 export function tileCoordinateToString(coord: TileCoordinate): string {
@@ -122,13 +124,13 @@ export interface Rule {
   condition: Function;
 }
 
-export interface WinCondition<TState extends BaseState> extends Rule {
+interface WinCondition<TState extends BaseState> extends Rule {
   // A win condition determines if the game is over, and if it is, who the
   // winner is (or winners, in case of multiple, such as a tie).
   condition: (state: TState) => PlayerInfo[] | null; // Returns the info of the winning player, or null if no winner yet
 }
 
-export const NoMovesWinCondition: WinCondition<BaseState> = {
+const NoMovesWinCondition: WinCondition<BaseState> = {
   condition: (state: BaseState): PlayerInfo[] | null => {
     // If a player has no valid moves, they lose.
     const availableActions = state.availableActions;
@@ -142,7 +144,7 @@ export const NoMovesWinCondition: WinCondition<BaseState> = {
     "The game ends when a player has no valid moves available. The other player wins.",
 };
 
-export const NoMovesHighestScoreWinCondition: WinCondition<BaseState> = {
+const NoMovesHighestScoreWinCondition: WinCondition<BaseState> = {
   condition: (state: BaseState): PlayerInfo[] | null => {
     // If a player has no valid moves, the game ends and the player with the
     // highest score wins. If multiple players have the highest score, they all
@@ -173,7 +175,7 @@ export const NoMovesHighestScoreWinCondition: WinCondition<BaseState> = {
     "The game ends when a player has no valid moves available. The player with the highest score wins.",
 };
 
-export const NoMovesLowestScoreWinCondition: WinCondition<BaseState> = {
+const NoMovesLowestScoreWinCondition: WinCondition<BaseState> = {
   condition: (state: BaseState): PlayerInfo[] | null => {
     // If a player has no valid moves, the game ends and the player with the
     // lowest score wins. If multiple players have the lowest score, they all
@@ -201,13 +203,13 @@ export const NoMovesLowestScoreWinCondition: WinCondition<BaseState> = {
     "The game ends when a player has no valid moves available. The player with the lowest score wins.",
 };
 
-export interface ScoreCondition extends Rule {
+interface ScoreCondition extends Rule {
   // A score condition determines if a slice results in points being awarded to
   // a player, and if so, how many points.
   condition: (turnResult: TurnResult) => Map<string, number> | undefined; // Returns a map of PlayerInfo.uuid to score change, or undefined if no score change
 }
 
-export const MarkedSquaresScoreCondition: ScoreCondition = {
+const MarkedSquaresScoreCondition: ScoreCondition = {
   condition: (turnResult: TurnResult): Map<string, number> | undefined => {
     // Awards points to the player for each marked square removed from the board
     const scoreChanges = new Map<string, number>();
@@ -227,7 +229,7 @@ export const MarkedSquaresScoreCondition: ScoreCondition = {
     "Points are awarded for each marked square removed from the board.",
 };
 
-export const TotalAreaScoreCondition: ScoreCondition = {
+const TotalAreaScoreCondition: ScoreCondition = {
   condition: (turnResult: TurnResult): Map<string, number> | undefined => {
     // Awards points to the player for the total area of the removed boards
     const scoreChanges = new Map<string, number>();
@@ -443,14 +445,30 @@ export class Game<TState extends BaseState> {
   constructor(
     initialState: TState,
     players: Player<TState>[],
-    winConditions: WinCondition<BaseState>[],
-    scoreConditions: ScoreCondition[]
+    winConditions: WinConditionEnum[],
+    scoreConditions: ScoreConditionEnum[]
   ) {
     this.state = initialState;
     this.players = players;
     this.players.sort((a, b) => a.info.turnRemainder - b.info.turnRemainder);
-    this.winConditions = winConditions;
-    this.scoreConditions = scoreConditions;
+    this.winConditions = winConditions.map((wc) => {
+      switch (wc) {
+        case WinConditionEnum.NoMovesLeft:
+          return NoMovesWinCondition;
+        case WinConditionEnum.HighestScore:
+          return NoMovesHighestScoreWinCondition;
+        case WinConditionEnum.LowestScore:
+          return NoMovesLowestScoreWinCondition;
+      }
+    });
+    this.scoreConditions = scoreConditions.map((sc) => {
+      switch (sc) {
+        case ScoreConditionEnum.MarkedSquares:
+          return MarkedSquaresScoreCondition;
+        case ScoreConditionEnum.TotalArea:
+          return TotalAreaScoreCondition;
+      }
+    });
   }
 
   get availableActions(): Action[] {

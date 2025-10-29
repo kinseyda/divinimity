@@ -2,12 +2,17 @@ import cors from "cors";
 import express from "express";
 import { Server } from "socket.io";
 import {
-  ClientToServerSocketEvents,
+  ClientToClientMessage,
+  ClientToClientMessageType,
+  ClientToServerMessageType,
   JoinSessionData,
-  ServerToClientSocketEvents,
+  JoinSessionMessage,
+  ServerToClientMessage,
+  ServerToClientMessageData,
+  ServerToClientMessageType,
   SessionInfo,
   StartSessionData,
-  TurnData,
+  StartSessionMessage,
 } from "../../shared";
 import { getConnection } from "./db-utils";
 
@@ -24,32 +29,37 @@ interface SessionStoreEntry {
 
 const sessionStore: Map<string, SessionStoreEntry> = new Map();
 
-function updateSession(sessionId: string, session: SessionInfo) {
+function updateSessionTimestamp(sessionId: string) {
   const entry = sessionStore.get(sessionId);
   if (entry) {
-    entry.session = session;
     entry.session.lastUpdated = Date.now();
-  }
-  for (const socketId of entry?.sockets || []) {
-    const socket = io.sockets.sockets.get(socketId);
-    if (socket) {
-      socket.emit(ServerToClientSocketEvents.SESSION_UPDATED, entry.session);
-    }
   }
 }
 
-function printSessions() {
-  console.log("Current sessions:");
-  sessionStore.forEach((entry, id) => {
-    const { lastUpdated, players, turns } = entry.session;
-    console.log(
-      `- ID: ${id}, Last Updated: ${new Date(
-        lastUpdated
-      ).toISOString()}, Players: ${players
-        .map((p) => p.name)
-        .join(", ")}, Turns: ${turns.length}`
-    );
-  });
+function updateSession(session: SessionInfo) {
+  // For updating session info in the store, such as adding or removing players
+  const entry = sessionStore.get(session.id);
+  if (entry) {
+    entry.session = session;
+    updateSessionTimestamp(session.id);
+  }
+}
+
+function relayMessageToSession(
+  sessionId: string,
+  originSocketId: string,
+  message: ClientToClientMessage
+) {
+  const entry = sessionStore.get(sessionId);
+  if (entry) {
+    entry.sockets.forEach((socketId) => {
+      if (socketId !== originSocketId) {
+        console.log("Relaying message to socket:", socketId, message);
+        io.to(socketId).emit(message.type, message);
+        updateSessionTimestamp(sessionId);
+      }
+    });
+  }
 }
 
 function clearOldSessions(maxAgeMs: number) {
@@ -114,85 +124,99 @@ const io = new Server(server, {
 });
 io.on("connection", (socket) => {
   console.log("a user connected");
-  // Handle incoming socket events here. Upon connection, a user is either
-  // trying to start a session or join one. They will emit either a
-  // "start-session" or "join-session" event with their player ID and (if
-  // joining) the session ID. Then, in both cases, the server will respond with
-  // a "session-started" event, with the full session data (including the
-  // session ID). From there, players will emit "make-move" events with their
-  // move data, and the server will broadcast the updated session state to both
-  // players with a "session-updated" event.
 
-  socket.on(
-    ClientToServerSocketEvents.START_SESSION,
-    (data: StartSessionData) => {
-      // Handle start session
-      const { playerInfo, ruleset } = data;
-      const sessionId = generateSessionId();
-      const newSession: SessionInfo = {
-        id: sessionId,
-        turns: [],
-        players: [playerInfo],
-        ruleset,
-        lastUpdated: Date.now(),
-      };
-      sessionStore.set(sessionId, {
-        session: newSession,
-        sockets: [socket.id],
+  socket.onAny((event, msg) => {
+    if (event === "disconnect") {
+      console.log("user disconnected");
+      // Remove socket from any sessions it was part of
+      // TODO optimize this, store a map of socketId to sessionIds (?)
+      sessionStore.forEach((entry, sessionId) => {
+        const index = entry.sockets.indexOf(socket.id);
+        if (index !== -1) {
+          entry.sockets.splice(index, 1);
+          updateSessionTimestamp(sessionId);
+        }
       });
-      // Respond to the client with the session data
-      socket.emit(ServerToClientSocketEvents.SESSION_STARTED, newSession);
-      console.log(`Session started with ID: ${sessionId}`);
-      printSessions();
     }
-  );
-
-  socket.on(
-    ClientToServerSocketEvents.JOIN_SESSION,
-    (data: JoinSessionData) => {
-      // Handle join session
-      const { sessionId, playerInfo } = data;
-
-      const entry = sessionStore.get(sessionId);
-      if (entry) {
-        const players = [...entry.session.players, playerInfo];
-        players.sort((a, b) => a.turnRemainder - b.turnRemainder);
-        updateSession(sessionId, {
-          ...entry.session,
-          players,
-        });
-        entry.sockets.push(socket.id);
-        // Respond to the client with the session data
-        socket.emit(ServerToClientSocketEvents.SESSION_STARTED, entry.session);
-        console.log(
-          `Player ${playerInfo.name} joined session with ID: ${sessionId}`
+    console.log("Received client message:", msg);
+    switch (msg.type) {
+      default:
+        console.log(`Unknown message type: ${msg.type}`);
+        break;
+      case ClientToClientMessageType.Turn:
+      case ClientToClientMessageType.NewGame:
+        const clientMessage = msg as ClientToClientMessage;
+        relayMessageToSession(
+          clientMessage.sessionId,
+          socket.id,
+          clientMessage
         );
-        printSessions();
-      } else {
-        // Session not found; send an error or handle accordingly
-        socket.emit("error", `Session with ID ${sessionId} not found.`);
-      }
-    }
-  );
+        break;
+      case ClientToServerMessageType.StartSession:
+        const { playerInfo, ruleset } = msg.data as StartSessionData;
+        const sessionId = generateSessionId();
+        const newSession: SessionInfo = {
+          id: sessionId,
+          players: [playerInfo],
+          lastUpdated: Date.now(),
+        };
+        sessionStore.set(sessionId, {
+          session: newSession,
+          sockets: [socket.id],
+        });
+        socket.join(sessionId);
+        const startSuccessMessageData: ServerToClientMessageData = {
+          session: newSession,
+        };
+        const startSuccessMessage: ServerToClientMessage = {
+          type: ServerToClientMessageType.StartSuccess,
+          data: startSuccessMessageData,
+        };
+        console.log("Successfully started session:", newSession);
+        socket.emit(
+          ServerToClientMessageType.StartSuccess,
+          startSuccessMessage
+        );
+        break;
+      case ClientToServerMessageType.JoinSession:
+        const { sessionId: joinSessionId, playerInfo: joinPlayerInfo } =
+          msg.data as JoinSessionData;
+        const entry = sessionStore.get(joinSessionId);
+        if (entry) {
+          entry.sockets.push(socket.id);
+          socket.join(joinSessionId);
+          entry.session.players.push(joinPlayerInfo);
+          updateSessionTimestamp(joinSessionId);
+          const successMessageData: ServerToClientMessageData = {
+            session: entry.session,
+          };
+          const successMessage: ServerToClientMessage = {
+            type: ServerToClientMessageType.JoinSuccess,
+            data: successMessageData,
+          };
+          console.log("Successfully joined session:", entry.session);
+          socket.emit(ServerToClientMessageType.JoinSuccess, successMessage);
 
-  socket.on(ClientToServerSocketEvents.TURN, (data: TurnData) => {
-    // Handle make move
-    const { sessionId, turn } = data;
-    const entry = sessionStore.get(sessionId);
-    if (entry) {
-      const turns = [...entry.session.turns, turn];
-      updateSession(sessionId, {
-        ...entry.session,
-        turns,
-      });
-      console.log(`Turn added to session ${sessionId}:`, turn);
-    } else {
-      socket.emit("error", `Session with ID ${sessionId} not found.`);
+          // Notify all clients in the session that it is ready
+          const SessionUpdatedMessageData: ServerToClientMessageData = {
+            session: entry.session,
+          };
+          const SessionUpdatedMessage: ServerToClientMessage = {
+            type: ServerToClientMessageType.SessionUpdated,
+            data: SessionUpdatedMessageData,
+          };
+          io.to(joinSessionId).emit(
+            ServerToClientMessageType.SessionUpdated,
+            SessionUpdatedMessage
+          );
+        } else {
+          socket.emit(
+            ServerToClientMessageType.JoinFailure,
+            "Session not found"
+          );
+        }
+        break;
     }
-  });
-
-  socket.on(ClientToServerSocketEvents.DISCONNECT, () => {
-    console.log("user disconnected");
   });
 });
 

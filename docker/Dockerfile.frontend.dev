@@ -1,21 +1,6 @@
 FROM node:24-trixie
 WORKDIR /app
 
-# Copy manifests and tsconfigs for dependency installation
-COPY frontend/package*.json ./frontend/
-COPY frontend/tsconfig.json ./frontend/
-COPY shared/tsconfig.json ./shared/
-
-
-# Ensure dev deps are installed
-ENV NODE_ENV=development
-
-# Install frontend dependencies
-WORKDIR /app/frontend
-RUN npm install
-
-# Copy the rest of the repo
-WORKDIR /app
 COPY . .
 
 # Build shared first
@@ -26,6 +11,6 @@ RUN tsc -b
 
 # Set working directory to frontend
 WORKDIR /app/frontend
-
+RUN npm install
 EXPOSE 4321
 CMD ["npm", "run", "dev"]

@@ -22,12 +22,11 @@ export default defineComponent({
   <input
     type="radio"
     :name="groupName"
-    class="tab"
+    class="tab border-b-2 border-base-100 rounded-b-none"
     :aria-label="tabName"
     :checked="isActive"
   />
   <div class="tab-content">
-    <div class="divider p-2 -m-2" />
     <slot />
   </div>
 </template>

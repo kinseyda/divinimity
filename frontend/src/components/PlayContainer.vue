@@ -53,12 +53,35 @@
                       </tbody>
                     </table>
                   </div>
-                  <div class="divider m-0" />
-                  <div class="shrink-0 flex flex-col gap-2 text-xs">
-                    <RulesDescription
-                      :winConditions="game.winConditions"
-                      :scoreConditions="game.scoreConditions"
-                    />
+                  <div
+                    class="shrink-0 collapse collapse-arrow bg-base-100 border-base-300 border"
+                  >
+                    <input type="checkbox" />
+                    <div
+                      class="collapse-title font-semibold flex flex-row items-center gap-2"
+                    >
+                      <CircleQuestionMarkIcon class="inline-block" />
+                      <span>Help</span>
+                    </div>
+                    <div class="collapse-content text-sm">
+                      <RulesDescription
+                        :winConditions="[
+                          winCondition === WinConditionEnum.NoMovesLeft
+                            ? WinCondition.NoMovesLeft
+                            : winCondition ===
+                              WinConditionEnum.NoMovesHighestScore
+                            ? WinCondition.HighestScore
+                            : WinCondition.LowestScore,
+                        ]"
+                        :scoreConditions="
+                          scoringSystem === ScoringSystemEnum.None
+                            ? [] as ScoreCondition[]
+                            : scoringSystem === ScoringSystemEnum.MarkedSquares
+                            ? [ScoreCondition.MarkedSquares]
+                            : [ScoreCondition.TotalArea]
+                        "
+                      />
+                    </div>
                   </div>
                 </div>
               </TabContent>
@@ -76,89 +99,107 @@
       <template #drawerContent>
         <TabGroup>
           <TabContent groupName="setupTabs" :isActive="true" tabName="Players">
-            <fieldset class="fieldset">
-              <legend class="fieldset-legend">Second Player</legend>
-              <select class="select" v-model="secondPlayerType">
-                <option :value="PlayerTypeEnum.Random">CPU - Random</option>
-                <option :value="PlayerTypeEnum.NetworkInitiator">
-                  Network (Host new game)
-                </option>
-                <option :value="PlayerTypeEnum.NetworkResponder">
-                  Network (Join a game)
-                </option>
-              </select>
-            </fieldset>
-            <fieldset
-              class="fieldset"
-              v-if="secondPlayerType === PlayerTypeEnum.Random"
-            >
-              <legend class="fieldset-legend">Random Player Delay</legend>
-              <input
-                type="range"
-                class="range range-primary"
-                min="0"
-                max="1000"
-                step="100"
-                v-model="randomPlayerDelay"
-              />
-              <div class="flex justify-between px-2.5 mt-2 text-xs">
-                <span>0 ms</span>
-                <span>1000 ms</span>
-              </div>
-            </fieldset>
-            <fieldset
-              class="fieldset"
-              v-else-if="secondPlayerType === PlayerTypeEnum.NetworkResponder"
-            >
-              <label class="label">
-                <span class="label-text">Session ID</span>
-              </label>
-              <input
-                type="text"
-                placeholder="Enter Session ID"
-                class="input input-bordered w-full"
-                v-model="sessionId"
-              />
-            </fieldset>
-            <button
-              class="btn btn-secondary btn-sm mt-2"
-              v-if="secondPlayerType === PlayerTypeEnum.NetworkResponder"
-              :class="{ disabled: !sessionId }"
-              @click="joinSession(sessionId!)"
-            >
-              Join Session
-            </button>
-            <fieldset
-              class="fieldset"
-              v-else-if="secondPlayerType === PlayerTypeEnum.NetworkInitiator"
-            >
-              <legend class="fieldset-legend">Your Session ID:</legend>
-              <label class="input input-bordered w-full">
-                <input
-                  type="text"
-                  :value="session ? session.id : ''"
-                  class="font-mono"
-                  readonly
-                />
-                <ClipboardIcon
-                  class="size-4 ml-2 cursor-pointer"
-                  :title="session ? 'Copy Session ID to clipboard' : ''"
-                  @click="writeSessionIDToClipboard()"
-                />
-              </label>
-            </fieldset>
-
-            <fieldset
-              class="fieldset"
-              v-if="
-                secondPlayerType === PlayerTypeEnum.NetworkInitiator ||
-                secondPlayerType === PlayerTypeEnum.NetworkResponder
-              "
-            >
-              <legend class="fieldset-legend">Session Info</legend>
-              <!-- For debugging -->
-              session: {{ session }}, socket: {{ socket?.id }}
-            </fieldset>
+            <TabGroup styleType="box" styleSize="sm">
+              <TabContent
+                groupName="networkSelectTabs"
+                :isActive="true"
+                tabName="Local AI"
+              >
+                <fieldset class="fieldset">
+                  <legend class="fieldset-legend">AI Strategy</legend>
+                  <select class="select" v-model="otherPlayerType">
+                    <option :value="PlayerTypeEnum.AI">Random</option>
+                  </select>
+                </fieldset>
+                <fieldset
+                  class="fieldset"
+                  v-if="otherPlayerType === PlayerTypeEnum.AI"
+                >
+                  <legend class="fieldset-legend">Random Player Delay</legend>
+                  <input
+                    type="range"
+                    class="range range-primary"
+                    min="0"
+                    max="1000"
+                    step="100"
+                    v-model="randomPlayerDelay"
+                  />
+                  <div class="flex justify-between px-2.5 mt-2 text-xs">
+                    <span>0 ms</span>
+                    <span>1000 ms</span>
+                  </div>
+                </fieldset>
+              </TabContent>
+              <TabContent groupName="networkSelectTabs" tabName="Network">
+                <fieldset class="fieldset">
+                  <select class="select" v-model="networkRole">
+                    <option :value="NetworkRoleEnum.NetworkInitiator">
+                      Host a new game
+                    </option>
+                    <option :value="NetworkRoleEnum.NetworkJoiner">
+                      Join a game
+                    </option>
+                  </select>
+                </fieldset>
+                <fieldset
+                  class="fieldset"
+                  v-if="networkRole === NetworkRoleEnum.NetworkJoiner"
+                >
+                  <label class="label">
+                    <span class="label-text">Session ID</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter Session ID"
+                    class="input input-bordered w-full"
+                    v-model="sessionId"
+                  />
+                  <button
+                    class="btn btn-secondary btn-sm mt-2"
+                    :class="{ disabled: !sessionId }"
+                    @click="joinSession(sessionId!)"
+                  >
+                    Join Session
+                  </button>
+                </fieldset>
+                <fieldset
+                  class="fieldset"
+                  v-else-if="otherPlayerType === PlayerTypeEnum.Network"
+                >
+                  <legend class="fieldset-legend">Your Session ID:</legend>
+                  <label class="input input-bordered w-full">
+                    <input
+                      type="text"
+                      :value="session ? session.id : ''"
+                      class="font-mono"
+                      readonly
+                    />
+                    <ClipboardIcon
+                      class="size-4 ml-2 cursor-pointer"
+                      :title="session ? 'Copy Session ID to clipboard' : ''"
+                      @click="writeSessionIDToClipboard()"
+                    />
+                  </label>
+                  <button
+                    class="btn btn-secondary btn-sm mt-2"
+                    @click="newSession"
+                  >
+                    New Session
+                  </button>
+                </fieldset>
+                <fieldset
+                  class="fieldset"
+                  v-if="
+                    networkRole === NetworkRoleEnum.NetworkInitiator ||
+                    networkRole === NetworkRoleEnum.NetworkJoiner
+                  "
+                >
+                  <legend class="fieldset-legend">Session Info</legend>
+                  <!-- For debugging -->
+                  session: {{ session }}, socket: {{ socket?.id }}
+                </fieldset>
+              </TabContent>
+            </TabGroup>
           </TabContent>
           <TabContent groupName="setupTabs" tabName="Rules">
             <fieldset class="fieldset">
@@ -207,6 +248,7 @@
 import { useVModel } from "@nanostores/vue";
 import {
   ClipboardIcon,
+  CircleQuestionMarkIcon,
   InfoIcon,
   PencilRulerIcon,
   PlayIcon,
@@ -241,8 +283,10 @@ import GameDisplay from "./GameDisplay.vue";
 import {
   gameSetupStore,
   PlayerType as UIPlayerTypeEnum,
-  ScoringSystem as UUIScoringSystemEnum,
+  ScoringSystem as UIScoringSystemEnum,
   WinCondition as UIWinConditionEnum,
+  AIStrategy as UIAIStrategyEnum,
+  NetworkRole as UINetworkRoleEnum,
 } from "./GameSetupStore";
 import RulesDescription from "./RulesDescription.vue";
 import TabContent from "./TabContent.vue";
@@ -282,6 +326,7 @@ export default defineComponent({
     InfoIcon,
     PlayIcon,
     ClipboardIcon,
+    CircleQuestionMarkIcon,
     GameDisplay,
     DrawerContent,
     TabGroup,
@@ -294,30 +339,37 @@ export default defineComponent({
     return {
       PlayerTypeEnum: UIPlayerTypeEnum,
       WinConditionEnum: UIWinConditionEnum,
-      ScoringSystemEnum: UUIScoringSystemEnum,
+      WinCondition: WinCondition,
+      ScoreCondition: ScoreCondition,
+      ScoringSystemEnum: UIScoringSystemEnum,
+      AIStrategyEnum: UIAIStrategyEnum,
+      NetworkRoleEnum: UINetworkRoleEnum,
+
       game: undefined as Game<VisualState> | undefined,
       gameInfoDrawerId,
       gameSetupDrawerId,
       session: undefined as SessionInfo | undefined,
       socket: undefined as Socket | undefined,
+      sessionId: undefined as string | undefined,
     };
   },
   setup() {
-    const secondPlayerType = useVModel(gameSetupStore, "secondPlayerType");
+    const otherPlayerType = useVModel(gameSetupStore, "otherPlayerType");
+    const aiStrategy = useVModel(gameSetupStore, "aiStrategy");
+    const networkRole = useVModel(gameSetupStore, "networkRole");
     const randomPlayerDelay = useVModel(gameSetupStore, "randomPlayerDelay");
     const winCondition = useVModel(gameSetupStore, "winCondition");
     const scoringSystem = useVModel(gameSetupStore, "scoringSystem");
-    const sessionId = useVModel(gameSetupStore, "sessionId");
     return {
-      secondPlayerType,
+      otherPlayerType,
+      aiStrategy,
+      networkRole,
       randomPlayerDelay,
       winCondition,
       scoringSystem,
-      sessionId,
     };
   },
   mounted() {
-    this.newSession();
     this.newGame();
   },
   computed: {
@@ -432,9 +484,9 @@ export default defineComponent({
                 ? WinCondition.HighestScore
                 : WinCondition.LowestScore,
             scoreCondition:
-              this.scoringSystem == UUIScoringSystemEnum.None
+              this.scoringSystem == UIScoringSystemEnum.None
                 ? undefined
-                : this.scoringSystem == UUIScoringSystemEnum.MarkedSquares
+                : this.scoringSystem == UIScoringSystemEnum.MarkedSquares
                 ? ScoreCondition.MarkedSquares
                 : ScoreCondition.TotalArea,
           },
@@ -537,11 +589,11 @@ export default defineComponent({
               : UIWinConditionEnum.NoMovesLowestScore;
           this.scoringSystem =
             ruleset.scoreCondition === undefined
-              ? UUIScoringSystemEnum.None
+              ? UIScoringSystemEnum.None
               : ruleset.scoreCondition === ScoreCondition.MarkedSquares
-              ? UUIScoringSystemEnum.MarkedSquares
-              : UUIScoringSystemEnum.TotalArea;
-			
+              ? UIScoringSystemEnum.MarkedSquares
+              : UIScoringSystemEnum.TotalArea;
+
           this.newGameWithBoards(boards);
         }
       );
@@ -585,51 +637,61 @@ export default defineComponent({
         });
       };
 
-      const visualPlayer = new VisualPlayer("User", 0, getActionCallback);
-      let secondPlayer;
+      let otherPlayer;
 
-      switch (this.secondPlayerType) {
-        case UIPlayerTypeEnum.Random:
-          secondPlayer = new RandomPlayer(
+      switch (this.otherPlayerType) {
+        case UIPlayerTypeEnum.AI:
+          otherPlayer = new RandomPlayer(
             1,
             "Random CPU",
             this.randomPlayerDelay
           );
           break;
-        case UIPlayerTypeEnum.NetworkInitiator:
-          secondPlayer = new NetworkPlayer(
-            {
-              uuid:
-                "network-player-" + Math.random().toString(36).substring(2, 15),
-              name: "Network CPU",
-              turnRemainder: 0,
-            },
-            this.session!
-          );
-          break;
-        case UIPlayerTypeEnum.NetworkResponder:
-          secondPlayer = new NetworkPlayer(
-            {
-              uuid:
-                "network-player-" + Math.random().toString(36).substring(2, 15),
-              name: "Network CPU",
-              turnRemainder: 1,
-            },
-            this.session!
-          );
-          break;
+        case UIPlayerTypeEnum.Network:
+          switch (this.networkRole) {
+            case UINetworkRoleEnum.NetworkInitiator:
+              otherPlayer = new NetworkPlayer(
+                {
+                  uuid:
+                    "network-player-" +
+                    Math.random().toString(36).substring(2, 15),
+                  name: "Network Player (Host)",
+                  turnRemainder: 1,
+                },
+                this.session!
+              );
+              break;
+            case UINetworkRoleEnum.NetworkJoiner:
+              otherPlayer = new NetworkPlayer(
+                {
+                  uuid:
+                    "network-player-" +
+                    Math.random().toString(36).substring(2, 15),
+                  name: "Network Player (Joiner)",
+                  turnRemainder: 1,
+                },
+                this.session!
+              );
+              break;
+          }
         default:
           throw new Error("Unknown player type");
       }
 
+      const visualPlayer = new VisualPlayer(
+        "User",
+        otherPlayer.info.turnRemainder === 0 ? 1 : 0,
+        getActionCallback
+      );
+
       let scoringConditions = [];
       switch (this.scoringSystem) {
-        case UUIScoringSystemEnum.None:
+        case UIScoringSystemEnum.None:
           break;
-        case UUIScoringSystemEnum.MarkedSquares:
+        case UIScoringSystemEnum.MarkedSquares:
           scoringConditions.push(ScoreCondition.MarkedSquares);
           break;
-        case UUIScoringSystemEnum.TotalArea:
+        case UIScoringSystemEnum.TotalArea:
           scoringConditions.push(ScoreCondition.TotalArea);
           break;
         default:
@@ -652,11 +714,11 @@ export default defineComponent({
       }
       this.game = new Game<VisualState>(
         new VisualState(
-          [visualPlayer.info, secondPlayer.info],
+          [visualPlayer.info, otherPlayer.info],
           boards,
           actionCallback
         ),
-        [visualPlayer, secondPlayer],
+        [visualPlayer, otherPlayer],
         winConditions,
         scoringConditions
       );
@@ -670,9 +732,9 @@ export default defineComponent({
                 ? WinCondition.HighestScore
                 : WinCondition.LowestScore,
             scoreCondition:
-              this.scoringSystem == UUIScoringSystemEnum.None
+              this.scoringSystem == UIScoringSystemEnum.None
                 ? undefined
-                : this.scoringSystem == UUIScoringSystemEnum.MarkedSquares
+                : this.scoringSystem == UIScoringSystemEnum.MarkedSquares
                 ? ScoreCondition.MarkedSquares
                 : ScoreCondition.TotalArea,
           },
@@ -686,6 +748,8 @@ export default defineComponent({
         console.log("Emitting new game message:", newGameMessage);
         this.socket?.emit(ClientToClientMessageType.NewGame, newGameMessage);
       }
+      console.log("Starting game play loop");
+      console.log("Game:", this.game);
       this.game.playLoop();
     },
     newGame() {

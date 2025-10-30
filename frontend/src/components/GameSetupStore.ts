@@ -2,10 +2,18 @@ import { persistentMap } from "@nanostores/persistent";
 import z from "zod";
 
 export enum PlayerType {
-  Random = "Random",
-  NetworkInitiator = "Network (Initiator)",
-  NetworkResponder = "Network (Responder)",
+  AI = "AI",
+  Network = "Network",
   Visual = "Visual",
+}
+
+export enum AIStrategy {
+  Random = "Random",
+}
+
+export enum NetworkRole {
+  NetworkInitiator = "Network Initiator",
+  NetworkJoiner = "Network Joiner",
 }
 
 export enum ScoringSystem {
@@ -21,7 +29,10 @@ export enum WinCondition {
 }
 
 export type GameSetupOptions = {
-  secondPlayerType: PlayerType;
+  turnRemainder: number;
+  otherPlayerType: PlayerType;
+  aiStrategy: AIStrategy;
+  networkRole: NetworkRole;
   randomPlayerDelay: number;
   winCondition: WinCondition;
   scoringSystem: ScoringSystem;
@@ -31,7 +42,10 @@ export type GameSetupOptions = {
 export const gameSetupStore = persistentMap<GameSetupOptions>(
   "gameSetupStore:",
   {
-    secondPlayerType: PlayerType.Random,
+    turnRemainder: 1,
+    otherPlayerType: PlayerType.AI,
+    aiStrategy: AIStrategy.Random,
+    networkRole: NetworkRole.NetworkInitiator,
     randomPlayerDelay: 1000,
     winCondition: WinCondition.NoMovesLeft,
     scoringSystem: ScoringSystem.None,
@@ -44,6 +58,7 @@ export const gameSetupStore = persistentMap<GameSetupOptions>(
 );
 
 const gameSetupValidation = z.object({
+  turnRemainder: z.number().min(0).max(1),
   secondPlayerType: z.nativeEnum(PlayerType),
   randomPlayerDelay: z.number().min(0).max(10000),
   winCondition: z.nativeEnum(WinCondition),

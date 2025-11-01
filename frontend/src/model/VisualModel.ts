@@ -1,17 +1,12 @@
 import {
-	Direction,
-	type Action,
-	type Board,
-	type PlayerInfo,
-	type Slice,
-	type TileCoordinate,
+  Direction,
+  type Action,
+  type Board,
+  type PlayerInfo,
+  type Slice,
+  type TileCoordinate,
 } from "../../../shared";
-import {
-	BaseState,
-	newBoard,
-	Player,
-	type TurnResult
-} from "./BaseModel";
+import { BaseState, Player, type TurnResult } from "./BaseModel";
 
 import paper from "paper";
 export type RedrawEvent = paper.Event & {
@@ -103,46 +98,6 @@ function minimumTranslationVector(
       rectA.center.y < rectB.center.y ? -overlapY : overlapY
     );
   }
-}
-
-/**
- * Generates a random board configuration.
- * @param minDimension Minimum width/height of the board
- * @param maxDimension Maximum width/height of the board
- * @param minMarks Minimum number of marked tiles
- * @param maxMarks Maximum number of marked tiles
- * @returns A randomly generated board
- */
-export function randomBoard(
-  minDimension = 2,
-  maxDimension = 10,
-  minMarks = 1,
-  maxMarks = 10
-): Board {
-  const width =
-    Math.floor(Math.random() * (maxDimension - minDimension + 1)) +
-    minDimension;
-  const height =
-    Math.floor(Math.random() * (maxDimension - minDimension + 1)) +
-    minDimension;
-  const numMarks =
-    Math.floor(Math.random() * (maxMarks - minMarks + 1)) + minMarks;
-  const markedCoordinates: TileCoordinate[] = [];
-  const occupied = new Set<string>();
-  while (
-    markedCoordinates.length < numMarks &&
-    occupied.size < width * height
-  ) {
-    const x = Math.floor(Math.random() * width);
-    const y = Math.floor(Math.random() * height);
-    const key = `${x},${y}`;
-    if (!occupied.has(key)) {
-      occupied.add(key);
-      markedCoordinates.push({ x, y });
-    }
-  }
-
-  return newBoard({ width, height }, markedCoordinates);
 }
 
 export class PaperBoard {
@@ -373,14 +328,17 @@ export class VisualState extends BaseState {
    * Create a new VisualState instance.
    * @param players
    * @param boards
+   * @param actionCallback - Callback to be called when the user makes a slice action via the UI
    */
   constructor(
     players: PlayerInfo[],
     boards: Board[],
-    actionCallback: (slice: Slice, board: Board) => void
+    actionCallback: (slice: Slice, board: Board) => void,
+    postTurnUpdaters?: ((turnResult: TurnResult) => void)[]
   ) {
-    super(players, boards);
+    super(players, boards, postTurnUpdaters);
     this.actionCallBack = actionCallback;
+    this.postTurnUpdaters.push(this.postTurnUpdate.bind(this));
     // Board positions are initialized at -1,-1 for all boards here since we
     // don't know the canvas dimensions. They will be updated later to be
     // placed around the center of the canvas, but before the first render.
@@ -628,7 +586,6 @@ export class VisualState extends BaseState {
     const newBoards = turnResult.sliceResult.boards;
     if (newBoards.reducedBoard === null && newBoards.childBoard === null) {
       // No new boards were created, nothing to do
-      // This can happen if the old board was 2x1 and both tiles were marked
       return;
     }
     const oldBoardWidth = oldBoard.dimensions.width;
@@ -813,7 +770,7 @@ export class VisualPlayer extends Player<VisualState> {
   constructor(
     name: string,
     turnRemainder: number,
-    getActionCallback: (state: VisualState) => Promise<Action>
+    getActionCallback: (state: VisualState) => Promise<[Action, undefined]>
   ) {
     super(name, turnRemainder, getActionCallback);
   }

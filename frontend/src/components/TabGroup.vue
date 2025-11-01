@@ -1,27 +1,49 @@
 <script lang="ts">
-import { defineComponent } from "vue";
+import { defineComponent, Fragment } from "vue";
 
 export default defineComponent({
   components: {},
   props: {
-    styleType: { type: String, required: false, default: "border" },
-    styleSize: { type: String, required: false, default: "xl" },
+    titles: {
+      type: Array as () => string[],
+      required: false,
+      default: () => [],
+    },
+    groupName: { type: String, required: true },
+    modelValue: { type: String, required: true },
   },
-  emits: {},
+  emits: ["update:modelValue"],
   data() {
-    return {};
+    return {
+      activeTab: 0,
+    };
   },
-  methods: {},
+  methods: {
+    changeTab(index: number) {
+      this.activeTab = index;
+      this.$emit("update:modelValue", this.titles[index]);
+    },
+  },
   setup() {
     return {};
   },
 });
 </script>
 <template>
-  <div
-    :class="`tabs tabs-${styleType} tabs-${styleSize} **:shadow-none size-full flex flex-row *:grow *:text-${styleSize}`"
-  >
-    <slot />
+  <div class="tabs tabs-border size-full">
+    <template v-for="(tabName, index) in titles" :key="index">
+      <input
+        type="radio"
+        :name="groupName"
+        class="tab border-b-2 border-base-100 rounded-b-none grow"
+        :aria-label="tabName"
+        :checked="index === activeTab"
+        @change="changeTab(index)"
+      />
+      <div class="tab-content">
+        <slot :name="tabName" />
+      </div>
+    </template>
   </div>
 </template>
 

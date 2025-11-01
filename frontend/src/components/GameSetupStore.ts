@@ -36,7 +36,6 @@ export type GameSetupOptions = {
   randomPlayerDelay: number;
   winCondition: WinCondition;
   scoringSystem: ScoringSystem;
-  sessionId: string | null;
 };
 
 export const gameSetupStore = persistentMap<GameSetupOptions>(
@@ -49,7 +48,6 @@ export const gameSetupStore = persistentMap<GameSetupOptions>(
     randomPlayerDelay: 1000,
     winCondition: WinCondition.NoMovesLeft,
     scoringSystem: ScoringSystem.None,
-    sessionId: null,
   },
   {
     encode: JSON.stringify,

@@ -22,8 +22,12 @@
             <GameDisplay :interactive="true" :game="game" />
           </template>
           <template #drawerContent>
-            <TabGroup>
-              <TabContent groupName="infoTabs" :isActive="true" tabName="Turns">
+            <TabGroup
+              :titles="['Turns', 'Info', 'Analysis']"
+              groupName="infoTabs"
+              v-model="activeTabInfo"
+            >
+              <template v-slot:Turns>
                 <div class="flex flex-col gap-4 size-full">
                   <div class="flex-grow overflow-auto relative">
                     <!-- Using relative and absolute here to make the table
@@ -84,53 +88,59 @@
                     </div>
                   </div>
                 </div>
-              </TabContent>
-              <TabContent groupName="infoTabs" tabName="Info">
+              </template>
+              <template v-slot:Info>
                 You will be able to see statistics about the current game and
                 the players here.
-              </TabContent>
-              <TabContent groupName="infoTabs" tabName="Analysis">
+              </template>
+              <template v-slot:Analysis>
                 You will be able to see analysis of the current game here.
-              </TabContent>
+              </template>
             </TabGroup>
           </template>
         </DrawerContent>
       </template>
       <template #drawerContent>
-        <TabGroup>
-          <TabContent groupName="setupTabs" :isActive="true" tabName="Players">
-            <TabGroup styleType="box" styleSize="sm">
-              <TabContent
-                groupName="networkSelectTabs"
-                :isActive="true"
-                tabName="Local AI"
-              >
-                <fieldset class="fieldset">
-                  <legend class="fieldset-legend">AI Strategy</legend>
-                  <select class="select" v-model="otherPlayerType">
-                    <option :value="PlayerTypeEnum.AI">Random</option>
-                  </select>
-                </fieldset>
-                <fieldset
-                  class="fieldset"
-                  v-if="otherPlayerType === PlayerTypeEnum.AI"
-                >
-                  <legend class="fieldset-legend">Random Player Delay</legend>
-                  <input
-                    type="range"
-                    class="range range-primary"
-                    min="0"
-                    max="1000"
-                    step="100"
-                    v-model="randomPlayerDelay"
-                  />
-                  <div class="flex justify-between px-2.5 mt-2 text-xs">
-                    <span>0 ms</span>
-                    <span>1000 ms</span>
-                  </div>
-                </fieldset>
-              </TabContent>
-              <TabContent groupName="networkSelectTabs" tabName="Network">
+        <TabGroup
+          :titles="['Players', 'Rules', 'Boards']"
+          groupName="setupTabs"
+          v-model="activeTabSetup"
+        >
+          <template v-slot:Players>
+            <TabGroup
+              :titles="[PlayerTypeEnum.AI, PlayerTypeEnum.Network]"
+              groupName="networkSelectTabs"
+              v-model="otherPlayerType"
+            >
+              <template v-slot:AI>
+                <div groupName="networkSelectTabs" :isActive="true">
+                  <fieldset class="fieldset">
+                    <legend class="fieldset-legend">AI Strategy</legend>
+                    <select class="select" v-model="aiStrategy">
+                      <option :value="AIStrategyEnum.Random">Random</option>
+                    </select>
+                  </fieldset>
+                  <fieldset
+                    class="fieldset"
+                    v-if="aiStrategy === AIStrategyEnum.Random"
+                  >
+                    <legend class="fieldset-legend">Random Player Delay</legend>
+                    <input
+                      type="range"
+                      class="range range-primary"
+                      min="0"
+                      max="1000"
+                      step="100"
+                      v-model="randomPlayerDelay"
+                    />
+                    <div class="flex justify-between px-2.5 mt-2 text-xs">
+                      <span>0 ms</span>
+                      <span>1000 ms</span>
+                    </div>
+                  </fieldset>
+                </div>
+              </template>
+              <template v-slot:Network>
                 <fieldset class="fieldset">
                   <select class="select" v-model="networkRole">
                     <option :value="NetworkRoleEnum.NetworkInitiator">
@@ -164,7 +174,7 @@
                 </fieldset>
                 <fieldset
                   class="fieldset"
-                  v-else-if="otherPlayerType === PlayerTypeEnum.Network"
+                  v-if="networkRole === NetworkRoleEnum.NetworkInitiator"
                 >
                   <legend class="fieldset-legend">Your Session ID:</legend>
                   <label class="input input-bordered w-full">
@@ -198,10 +208,10 @@
                   <!-- For debugging -->
                   session: {{ session }}, socket: {{ socket?.id }}
                 </fieldset>
-              </TabContent>
+              </template>
             </TabGroup>
-          </TabContent>
-          <TabContent groupName="setupTabs" tabName="Rules">
+          </template>
+          <template v-slot:Rules>
             <fieldset class="fieldset">
               <legend class="fieldset-legend">Win Conditions</legend>
               <select class="select" v-model="winCondition">
@@ -226,11 +236,11 @@
                 <option :value="ScoringSystemEnum.TotalArea">Total Area</option>
               </select>
             </fieldset>
-          </TabContent>
-          <TabContent groupName="setupTabs" tabName="Boards">
+          </template>
+          <template v-slot:Boards>
             You will be able to select board configurations (dimensions and
             markings) here.
-          </TabContent>
+          </template>
         </TabGroup>
 
         <label
@@ -247,8 +257,8 @@
 <script lang="ts">
 import { useVModel } from "@nanostores/vue";
 import {
-  ClipboardIcon,
   CircleQuestionMarkIcon,
+  ClipboardIcon,
   InfoIcon,
   PencilRulerIcon,
   PlayIcon,
@@ -271,27 +281,36 @@ import {
   type ServerToClientMessageData,
   type SessionInfo,
   type Slice,
+  type SliceResult,
   type StartSessionData,
+  type TurnData,
   type TurnMessage,
 } from "../../../shared";
-import { actionToString, Game, RandomPlayer } from "../model/BaseModel";
-import { NetworkPlayer } from "../model/Network";
+import {
+  actionToString,
+  BaseState,
+  Game,
+  Player,
+  randomBoard,
+  RandomPlayer,
+  type TurnResult,
+} from "../model/BaseModel";
 import { generateLoremIpsum } from "../model/StyleUtils";
-import { randomBoard, VisualPlayer, VisualState } from "../model/VisualModel";
+import { VisualPlayer, VisualState } from "../model/VisualModel";
 import DrawerContent from "./DrawerContent.vue";
 import GameDisplay from "./GameDisplay.vue";
 import {
   gameSetupStore,
+  AIStrategy as UIAIStrategyEnum,
+  NetworkRole as UINetworkRoleEnum,
   PlayerType as UIPlayerTypeEnum,
   ScoringSystem as UIScoringSystemEnum,
   WinCondition as UIWinConditionEnum,
-  AIStrategy as UIAIStrategyEnum,
-  NetworkRole as UINetworkRoleEnum,
 } from "./GameSetupStore";
 import RulesDescription from "./RulesDescription.vue";
-import TabContent from "./TabContent.vue";
 import TabGroup from "./TabGroup.vue";
 import TurnIndicator from "./TurnIndicator.vue";
+import { uiStore } from "./UIStore";
 
 const backendUrl = import.meta.env.PUBLIC_BACKEND_URL;
 
@@ -320,6 +339,21 @@ if (!websocketPath) {
 const gameInfoDrawerId = "game-info-drawer";
 const gameSetupDrawerId = "game-setup-drawer";
 
+/**
+ * A player that gets its actions from a network source.
+ */
+class NetworkPlayer extends Player<BaseState> {
+  constructor(
+    name: string,
+    turnRemainder: number,
+    getActionCallback: (
+      state: BaseState
+    ) => Promise<[Action, Board[] | undefined]>
+  ) {
+    super(name, turnRemainder, getActionCallback);
+  }
+}
+
 export default defineComponent({
   components: {
     PencilRulerIcon,
@@ -330,7 +364,6 @@ export default defineComponent({
     GameDisplay,
     DrawerContent,
     TabGroup,
-    TabContent,
     TurnIndicator,
     RulesDescription,
   },
@@ -344,7 +377,6 @@ export default defineComponent({
       ScoringSystemEnum: UIScoringSystemEnum,
       AIStrategyEnum: UIAIStrategyEnum,
       NetworkRoleEnum: UINetworkRoleEnum,
-
       game: undefined as Game<VisualState> | undefined,
       gameInfoDrawerId,
       gameSetupDrawerId,
@@ -360,6 +392,8 @@ export default defineComponent({
     const randomPlayerDelay = useVModel(gameSetupStore, "randomPlayerDelay");
     const winCondition = useVModel(gameSetupStore, "winCondition");
     const scoringSystem = useVModel(gameSetupStore, "scoringSystem");
+    const activeTabInfo = useVModel(uiStore, "infoTab");
+    const activeTabSetup = useVModel(uiStore, "setupTab");
     return {
       otherPlayerType,
       aiStrategy,
@@ -367,6 +401,8 @@ export default defineComponent({
       randomPlayerDelay,
       winCondition,
       scoringSystem,
+      activeTabInfo,
+      activeTabSetup,
     };
   },
   mounted() {
@@ -525,7 +561,7 @@ export default defineComponent({
           this.session = (msg.data as ServerToClientMessageData).session;
         }
       );
-      this.attachClientToClientHandlers();
+      this.attachNewGameListener();
     },
     joinSession(sessionId: string) {
       console.log("Joining session with ID:", sessionId);
@@ -571,9 +607,9 @@ export default defineComponent({
           this.session = (msg.data as ServerToClientMessageData).session;
         }
       );
-      this.attachClientToClientHandlers();
+      this.attachNewGameListener();
     },
-    attachClientToClientHandlers() {
+    attachNewGameListener() {
       if (!this.socket) return;
       this.socket.on(
         ClientToClientMessageType.NewGame,
@@ -597,9 +633,18 @@ export default defineComponent({
           this.newGameWithBoards(boards);
         }
       );
+    },
+    attachNetworkActionHandler(turnCallback: (action: TurnData) => void) {
+      if (!this.socket) return;
+      console.log("Attaching network action handler");
       this.socket.on(ClientToClientMessageType.Turn, (msg: TurnMessage) => {
-        console.log("Player turn message:", msg);
+        console.log("Player action message:", msg);
+        turnCallback(msg.data);
       });
+    },
+    detachNetworkActionHandler() {
+      if (!this.socket) return;
+      this.socket.off(ClientToClientMessageType.Turn);
     },
     writeSessionIDToClipboard() {
       if (this.session) {
@@ -612,31 +657,13 @@ export default defineComponent({
       }
     },
     newGameWithBoards(boards: Board[]) {
-      // We'll use a Promise and its resolver to "pipe" between getActionCallback
-      // and actionCallback. When getActionCallback is called, it returns a
-      // Promise<Action> and stores its resolver. When actionCallback is called
-      // (by the slice tool), it resolves the stored Promise.
-
-      let resolveAction: ((action: Action) => void) | null = null;
-
-      // The actionCallback will be called inside the slice tool's onMouseDown /
-      // onMouseUp functions. It shall resolve the getActionCallback promise
-      const actionCallback = (slice: Slice, board: Board) => {
-        if (resolveAction) {
-          resolveAction({ slice, board });
-          resolveAction = null;
-        }
-      };
-
-      // The getActionCallback will be used when the player needs to make a
-      // turn. It shall just wait for the slice tool to be used, returns a
-      // promise of an action.
-      const getActionCallback = (state: VisualState) => {
-        return new Promise<Action>((resolve) => {
-          resolveAction = resolve;
-        });
-      };
-
+      if (
+        this.otherPlayerType === this.PlayerTypeEnum.Network &&
+        !this.sessionReady
+      ) {
+        console.log("Cannot start network game: session not ready");
+        return;
+      }
       let otherPlayer;
 
       switch (this.otherPlayerType) {
@@ -648,35 +675,68 @@ export default defineComponent({
           );
           break;
         case UIPlayerTypeEnum.Network:
-          switch (this.networkRole) {
-            case UINetworkRoleEnum.NetworkInitiator:
-              otherPlayer = new NetworkPlayer(
-                {
-                  uuid:
-                    "network-player-" +
-                    Math.random().toString(36).substring(2, 15),
-                  name: "Network Player (Host)",
-                  turnRemainder: 1,
-                },
-                this.session!
+          // Similar pattern to the VisualPlayer's getActionCallback below,
+          // but for the NetworkPlayer instead. When the NetworkPlayer needs
+          // to make a turn, it will attach a temporary listener to the socket
+          // to wait for the turn message from the other player. When the
+          // message is received, it will call the actionCallback to resolve
+          // the turn.
+
+          const getNetworkActionCallback = (state: BaseState) => {
+            return new Promise<[Action, Board[] | undefined]>((resolve) => {
+              console.log(
+                "Network player waiting for action from other player"
               );
-              break;
-            case UINetworkRoleEnum.NetworkJoiner:
-              otherPlayer = new NetworkPlayer(
-                {
-                  uuid:
-                    "network-player-" +
-                    Math.random().toString(36).substring(2, 15),
-                  name: "Network Player (Joiner)",
-                  turnRemainder: 1,
-                },
-                this.session!
-              );
-              break;
-          }
+              this.attachNetworkActionHandler((turnData: TurnData) => {
+                console.log(
+                  "Network player received action from other player:",
+                  turnData
+                );
+                this.detachNetworkActionHandler();
+                const boards = Object.values(
+                  turnData.sliceResult.boards
+                ).filter((b) => b !== null) as Board[];
+
+                resolve([turnData.turn.action, boards]);
+              });
+            });
+          };
+
+          otherPlayer = new NetworkPlayer(
+            "Network Player",
+            this.networkRole === UINetworkRoleEnum.NetworkInitiator ? 1 : 0,
+            getNetworkActionCallback
+          );
+          break;
         default:
-          throw new Error("Unknown player type");
+          throw new Error(`Unknown player type: '${this.otherPlayerType}'`);
       }
+
+      // We'll use a Promise and its resolver to "pipe" between
+      // getActionCallback and actionCallback. When getActionCallback is called,
+      // it returns a Promise<[Action, Board | undefined]> and stores its
+      // resolver. When actionCallback is called (by the slice tool), it
+      // resolves the stored Promise.
+
+      let resolveAction: ((value: [Action, undefined]) => void) | null = null;
+
+      // The actionCallback will be called inside the slice tool's onMouseDown /
+      // onMouseUp functions. It shall resolve the getActionCallback promise
+      const actionCallback = (slice: Slice, board: Board) => {
+        if (resolveAction) {
+          resolveAction([{ slice, board }, undefined]);
+          resolveAction = null;
+        }
+      };
+
+      // The getActionCallback will be used when the player needs to make a
+      // turn. It shall just wait for the slice tool to be used, returns a
+      // promise of an action.
+      const getActionCallback = (state: VisualState) => {
+        return new Promise<[Action, undefined]>((resolve) => {
+          resolveAction = resolve;
+        });
+      };
 
       const visualPlayer = new VisualPlayer(
         "User",
@@ -716,7 +776,34 @@ export default defineComponent({
         new VisualState(
           [visualPlayer.info, otherPlayer.info],
           boards,
-          actionCallback
+          actionCallback,
+          [
+            (turnResult: TurnResult) => {
+              // Post turn updater to emit the slice and turn result to the
+              // other player.
+              if (this.socket && this.sessionReady) {
+                if (
+                  this.getVisualPlayer()!.info.uuid !==
+                  turnResult.turn.player.uuid
+                ) {
+                  // Only emit turns made by the visual player (local player)
+                  return;
+                }
+                const sliceResult: SliceResult = turnResult.sliceResult;
+                const turnData: TurnData = {
+                  turn: turnResult.turn,
+                  sliceResult: sliceResult,
+                };
+                const turnMessage: TurnMessage = {
+                  type: ClientToClientMessageType.Turn,
+                  data: turnData,
+                  sessionId: this.session!.id,
+                };
+                console.log("Emitting turn message:", turnMessage);
+                this.socket.emit(ClientToClientMessageType.Turn, turnMessage);
+              }
+            },
+          ]
         ),
         [visualPlayer, otherPlayer],
         winConditions,

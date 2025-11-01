@@ -9,6 +9,7 @@ import {
   type Turn,
   WinCondition as WinConditionEnum,
   ScoreCondition as ScoreConditionEnum,
+  type SliceResult,
 } from "../../../shared";
 
 export function tileCoordinateToString(coord: TileCoordinate): string {
@@ -17,7 +18,7 @@ export function tileCoordinateToString(coord: TileCoordinate): string {
 export class Player<TState extends BaseState> {
   info: PlayerInfo;
 
-  getActionCallback: (state: TState) => Promise<Action>;
+  getActionCallback: (state: TState) => Promise<[Action, Board[] | undefined]>;
 
   /**
    * Creates a new Player.
@@ -25,18 +26,23 @@ export class Player<TState extends BaseState> {
    * order.
    * @param getActionCallback - This function is called when it is this player's
    * turn to act. It should return a promise that resolves to the action the
-   * player wants to take.
+   * player wants to take. It can also optionally return an array of new boards
+   * that will be compared to the ones this action creates, and if any of the
+   * boards are identical, then the provided board will be used instead (i.e.
+   * retaining the provided UUID)
    */
   constructor(
     name: string,
     turnRemainder: number,
-    getActionCallback: (state: TState) => Promise<Action>
+    getActionCallback: (state: TState) => Promise<[Action, Board[] | undefined]>
   ) {
     this.info = { uuid: generateUUID(), name, turnRemainder };
     this.getActionCallback = getActionCallback;
   }
 
-  public async getAction(state: TState): Promise<Action> {
+  public async getAction(
+    state: TState
+  ): Promise<[Action, Board[] | undefined]> {
     return this.getActionCallback(state);
   }
 }
@@ -79,7 +85,6 @@ function generateUUID(): string {
   // Base 62
   return generateRandomString(len, base62chars);
 }
-
 function intToAlphaNumeric(num: number): string {
   const chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -256,15 +261,45 @@ export interface TurnResult {
   sliceResult: SliceResult;
 }
 
-export interface SliceResult {
-  boards: {
-    reducedBoard: Board | null; // The left or top of the sliced board. Will be null if this part of the board was removed due to not having any marked coordinates.
-    childBoard: Board | null; // The right or bottom of the sliced board. Will be null if this part of the board was removed due to not having any marked coordinates.
-  };
-  removedBoards: Board[]; // Will all have either zero marked coordinates, or be a single 1x1 board that is marked
-  scoreChanges?: Record<string, number>; // Keyed by PlayerInfo.uuid
-}
+/**
+ * Generates a random board configuration.
+ * @param minDimension Minimum width/height of the board
+ * @param maxDimension Maximum width/height of the board
+ * @param minMarks Minimum number of marked tiles
+ * @param maxMarks Maximum number of marked tiles
+ * @returns A randomly generated board
+ */
+export function randomBoard(
+  minDimension = 2,
+  maxDimension = 10,
+  minMarks = 1,
+  maxMarks = 10
+): Board {
+  const width =
+    Math.floor(Math.random() * (maxDimension - minDimension + 1)) +
+    minDimension;
+  const height =
+    Math.floor(Math.random() * (maxDimension - minDimension + 1)) +
+    minDimension;
+  const numMarks =
+    Math.floor(Math.random() * (maxMarks - minMarks + 1)) + minMarks;
+  const markedCoordinates: TileCoordinate[] = [];
+  const occupied = new Set<string>();
+  while (
+    markedCoordinates.length < numMarks &&
+    occupied.size < width * height
+  ) {
+    const x = Math.floor(Math.random() * width);
+    const y = Math.floor(Math.random() * height);
+    const key = `${x},${y}`;
+    if (!occupied.has(key)) {
+      occupied.add(key);
+      markedCoordinates.push({ x, y });
+    }
+  }
 
+  return newBoard({ width, height }, markedCoordinates);
+}
 export function sliceBoard(board: Board, slice: Slice): SliceResult | null {
   // Apply a slice on a board.
   // Returns null if the slice is invalid (out of bounds).
@@ -377,8 +412,13 @@ export abstract class BaseState {
   players: PlayerInfo[]; // Players should be sorted by their turnRemainder, should equal index
   scores: Record<string, number> = {}; // Keyed by PlayerInfo.uuid
   turnHistory: Turn[];
+  postTurnUpdaters: ((turnResult: TurnResult) => void)[];
 
-  constructor(players: PlayerInfo[], boards: Board[]) {
+  constructor(
+    players: PlayerInfo[],
+    boards: Board[],
+    postTurnUpdaters?: ((turnResult: TurnResult) => void)[]
+  ) {
     this.boards = boards.reduce((acc, board) => {
       acc[board.uuid] = board;
       return acc;
@@ -390,13 +430,8 @@ export abstract class BaseState {
     for (const player of players) {
       this.scores[player.uuid] = 0;
     }
+    this.postTurnUpdaters = postTurnUpdaters || [];
   }
-
-  // This method is called after each turn is played, and can be used to
-  // update any state that depends on the turn history or the current boards.
-  // For example, ensuring that boards are positioned consistently after a
-  // slice.
-  abstract postTurnUpdate(turnResult: TurnResult): void;
 
   get availableActions(): Action[] {
     // For each board, a slice can be made between any two tiles, or
@@ -504,7 +539,7 @@ export class Game<TState extends BaseState> {
     return winners;
   }
 
-  public simulateTurn(turn: Turn): TState {
+  public simulateTurn(turn: Turn, requestedNewBoards?: Board[]): TState {
     const { slice, board } = turn.action;
     const targetBoard = this.state.boards[board.uuid];
     if (!targetBoard) {
@@ -553,27 +588,71 @@ export class Game<TState extends BaseState> {
       stateCopy.scores[playerUuid] += scoreChange;
     }
 
-    stateCopy.postTurnUpdate(turnResult);
+    // If the player provided new boards that match the child or reduced board,
+    // use it instead to retain of those to retain the UUID (and any other
+    // properties)
+
+    if (requestedNewBoards) {
+      for (const requestedBoard of requestedNewBoards) {
+        if (
+          turnResult.sliceResult.boards.childBoard &&
+          boardHash(turnResult.sliceResult.boards.childBoard) ===
+            boardHash(requestedBoard)
+        ) {
+          stateCopy.boards[requestedBoard.uuid] = requestedBoard;
+          delete stateCopy.boards[
+            turnResult.sliceResult.boards.childBoard.uuid
+          ];
+          turnResult.sliceResult.boards.childBoard = requestedBoard;
+        } else if (
+          turnResult.sliceResult.boards.reducedBoard &&
+          boardHash(turnResult.sliceResult.boards.reducedBoard) ===
+            boardHash(requestedBoard)
+        ) {
+          stateCopy.boards[requestedBoard.uuid] = requestedBoard;
+          delete stateCopy.boards[
+            turnResult.sliceResult.boards.reducedBoard.uuid
+          ];
+          turnResult.sliceResult.boards.reducedBoard = requestedBoard;
+        }
+      }
+    }
+
+    stateCopy.postTurnUpdaters.forEach((updater) => {
+      updater(turnResult);
+    });
 
     return stateCopy;
   }
 
-  public playTurn(turn: Turn): void {
-    this.state = this.simulateTurn(turn);
+  public playTurn(turn: Turn, requestedNewBoards?: Board[]): void {
+    const newState = this.simulateTurn(turn, requestedNewBoards);
+
+    this.state = newState;
     this.state.turnHistory.push(turn);
+    console.log(
+      `Board UUIDs after turn ${this.state.turnHistory.length}:`,
+      Object.keys(this.state.boards)
+    );
   }
 
   public async playLoop(): Promise<void> {
+    console.log(`starting board UUIDs:`, Object.keys(this.state.boards));
     while (true) {
       const currentPlayer = this.currentPlayer();
       if (!currentPlayer) throw new Error("No current player found");
 
-      const action = await this.requestPlayerAction(currentPlayer);
+      const [action, requestedNewBoards] = await this.requestPlayerAction(
+        currentPlayer
+      );
       if (this.isValidAction(action)) {
-        this.playTurn({
-          player: currentPlayer.info,
-          action: action,
-        });
+        this.playTurn(
+          {
+            player: currentPlayer.info,
+            action: action,
+          },
+          requestedNewBoards
+        );
       }
 
       if (this.winners.length > 0) {
@@ -582,7 +661,9 @@ export class Game<TState extends BaseState> {
     }
   }
 
-  public async requestPlayerAction(player: Player<TState>): Promise<Action> {
+  public async requestPlayerAction(
+    player: Player<TState>
+  ): Promise<[Action, Board[] | undefined]> {
     return player.getAction(this.state);
   }
 
@@ -687,7 +768,7 @@ export class RandomPlayer extends Player<BaseState> {
 
       return new Promise((resolve) => {
         setTimeout(() => {
-          resolve(randomAction);
+          resolve([randomAction, undefined]);
         }, this.delayMs);
       });
     });

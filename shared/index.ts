@@ -51,14 +51,27 @@ export interface TurnMessage extends ClientToClientMessage {
   data: TurnData;
 }
 
+export interface TurnData {
+  turn: Turn;
+  sliceResult: SliceResult; 
+}
+
+export interface SliceResult {
+  boards: {
+    reducedBoard: Board | null; // The left or top of the sliced board. Will be null if this part of the board was removed due to not having any marked coordinates.
+    childBoard: Board | null; // The right or bottom of the sliced board. Will be null if this part of the board was removed due to not having any marked coordinates.
+  };
+  removedBoards: Board[]; // Will all have either zero marked coordinates, or be a single 1x1 board that is marked
+  scoreChanges?: Record<string, number>; // Keyed by PlayerInfo.uuid
+}
 export interface NewGameMessage extends ClientToClientMessage {
   type: ClientToClientMessageType.NewGame;
   data: NewGameData;
 }
 
 export interface NewGameData {
-	ruleset: Ruleset;
-	boards: Board[];
+  ruleset: Ruleset;
+  boards: Board[];
 }
 
 export interface SessionInfo {
@@ -97,11 +110,6 @@ export interface JoinSessionData {
   playerInfo: PlayerInfo;
 }
 
-export interface TurnData {
-  sessionId: string;
-  turn: Turn;
-}
-
 export interface Action {
   slice: Slice;
   board: Board;
@@ -115,7 +123,7 @@ export interface Turn {
 export interface PlayerInfo {
   uuid: string;
   name: string;
-  turnRemainder: number; // The player's turn is when (turn number % player count) == turn modulo
+  turnRemainder: number; // The player's turn is when (turn number % player count) == turn remainder
 }
 
 export enum Direction {

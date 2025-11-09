@@ -30,8 +30,6 @@
               <template v-slot:Turns>
                 <div class="flex flex-col gap-4 size-full">
                   <div class="flex-grow overflow-auto relative">
-                    <!-- Using relative and absolute here to make the table
-                    scroll without affecting the layout -->
                     <table
                       class="table table-pin-rows table-xs w-full max-h-full overflow-scroll absolute inset-0"
                     >
@@ -68,23 +66,7 @@
                       <span>Help</span>
                     </div>
                     <div class="collapse-content text-sm">
-                      <RulesDescription
-                        :winConditions="[
-                          winCondition === WinConditionEnum.NoMovesLeft
-                            ? WinCondition.NoMovesLeft
-                            : winCondition ===
-                              WinConditionEnum.NoMovesHighestScore
-                            ? WinCondition.HighestScore
-                            : WinCondition.LowestScore,
-                        ]"
-                        :scoreConditions="
-                          scoringSystem === ScoringSystemEnum.None
-                            ? [] as ScoreCondition[]
-                            : scoringSystem === ScoringSystemEnum.MarkedSquares
-                            ? [ScoreCondition.MarkedSquares]
-                            : [ScoreCondition.TotalArea]
-                        "
-                      />
+                      <RulesDescription :ruleset="game.ruleset" />
                     </div>
                   </div>
                 </div>
@@ -111,6 +93,7 @@
               :titles="[PlayerTypeEnum.AI, PlayerTypeEnum.Network]"
               groupName="networkSelectTabs"
               v-model="otherPlayerType"
+              :disabled="session !== undefined"
             >
               <template v-slot:AI>
                 <div groupName="networkSelectTabs" :isActive="true">
@@ -141,73 +124,14 @@
                 </div>
               </template>
               <template v-slot:Network>
-                <fieldset class="fieldset">
-                  <select class="select" v-model="networkRole">
-                    <option :value="NetworkRoleEnum.NetworkInitiator">
-                      Host a new game
-                    </option>
-                    <option :value="NetworkRoleEnum.NetworkJoiner">
-                      Join a game
-                    </option>
-                  </select>
-                </fieldset>
-                <fieldset
-                  class="fieldset"
-                  v-if="networkRole === NetworkRoleEnum.NetworkJoiner"
-                >
-                  <label class="label">
-                    <span class="label-text">Session ID</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Enter Session ID"
-                    class="input input-bordered w-full"
-                    v-model="sessionId"
-                  />
-                  <button
-                    class="btn btn-secondary btn-sm mt-2"
-                    :class="{ disabled: !sessionId }"
-                    @click="joinSession(sessionId!)"
-                  >
-                    Join Session
-                  </button>
-                </fieldset>
-                <fieldset
-                  class="fieldset"
-                  v-if="networkRole === NetworkRoleEnum.NetworkInitiator"
-                >
-                  <legend class="fieldset-legend">Your Session ID:</legend>
-                  <label class="input input-bordered w-full">
-                    <input
-                      type="text"
-                      :value="session ? session.id : ''"
-                      class="font-mono"
-                      readonly
-                    />
-                    <ClipboardIcon
-                      class="size-4 ml-2 cursor-pointer"
-                      :title="session ? 'Copy Session ID to clipboard' : ''"
-                      @click="writeSessionIDToClipboard()"
-                    />
-                  </label>
-                  <button
-                    class="btn btn-secondary btn-sm mt-2"
-                    @click="newSession"
-                  >
-                    New Session
-                  </button>
-                </fieldset>
-                <fieldset
-                  class="fieldset"
-                  v-if="
-                    networkRole === NetworkRoleEnum.NetworkInitiator ||
-                    networkRole === NetworkRoleEnum.NetworkJoiner
-                  "
-                >
-                  <legend class="fieldset-legend">Session Info</legend>
-                  <!-- For debugging -->
-                  session: {{ session }}, socket: {{ socket?.id }}
-                </fieldset>
+                <NetworkSessionSetup
+                  v-model:session="session"
+                  @update:ruleset="updateRuleset"
+                  :ruleset="uiRuleset"
+                  v-model:networkRole="networkRole"
+                  @newGameWithBoards="newGameWithBoards"
+                  ref="networkSessionSetup"
+                />
               </template>
             </TabGroup>
           </template>
@@ -268,15 +192,16 @@ import { defineComponent } from "vue";
 import {
   ClientToClientMessageType,
   ClientToServerMessageType,
-  ScoreCondition,
+  ScoreConditionEnum,
   ServerToClientMessageType,
-  WinCondition,
+  WinConditionEnum,
   type Action,
   type Board,
   type ClientToServerMessage,
   type JoinSessionData,
   type NewGameData,
   type NewGameMessage,
+  type Ruleset,
   type ServerToClientMessage,
   type ServerToClientMessageData,
   type SessionInfo,
@@ -311,6 +236,7 @@ import RulesDescription from "./RulesDescription.vue";
 import TabGroup from "./TabGroup.vue";
 import TurnIndicator from "./TurnIndicator.vue";
 import { uiStore } from "./UIStore";
+import NetworkSessionSetup from "./NetworkSessionSetup.vue";
 
 const backendUrl = import.meta.env.PUBLIC_BACKEND_URL;
 
@@ -322,18 +248,6 @@ const publicUrl = import.meta.env.PUBLIC_URL;
 
 if (!publicUrl) {
   throw new Error("PUBLIC_URL is not set");
-}
-
-const websocketUrl = import.meta.env.PUBLIC_WEBSOCKET_URL;
-
-if (!websocketUrl) {
-  throw new Error("PUBLIC_WEBSOCKET_URL is not set");
-}
-
-const websocketPath = import.meta.env.PUBLIC_WEBSOCKET_PATH;
-
-if (!websocketPath) {
-  throw new Error("PUBLIC_WEBSOCKET_PATH is not set");
 }
 
 const gameInfoDrawerId = "game-info-drawer";
@@ -366,14 +280,13 @@ export default defineComponent({
     TabGroup,
     TurnIndicator,
     RulesDescription,
+    NetworkSessionSetup,
   },
   emits: {},
   data() {
     return {
       PlayerTypeEnum: UIPlayerTypeEnum,
       WinConditionEnum: UIWinConditionEnum,
-      WinCondition: WinCondition,
-      ScoreCondition: ScoreCondition,
       ScoringSystemEnum: UIScoringSystemEnum,
       AIStrategyEnum: UIAIStrategyEnum,
       NetworkRoleEnum: UINetworkRoleEnum,
@@ -381,8 +294,7 @@ export default defineComponent({
       gameInfoDrawerId,
       gameSetupDrawerId,
       session: undefined as SessionInfo | undefined,
-      socket: undefined as Socket | undefined,
-      sessionId: undefined as string | undefined,
+      networkRuleset: undefined as Ruleset | undefined,
     };
   },
   setup() {
@@ -410,12 +322,50 @@ export default defineComponent({
   },
   computed: {
     sessionReady(): boolean {
-      return this.session !== undefined && this.session.players.length > 1;
+      return this.$refs.networkSessionSetup
+        ? (this.$refs.networkSessionSetup as typeof NetworkSessionSetup)
+            .sessionReady
+        : false;
+    },
+    uiRuleset(): Ruleset {
+      let scoreCondition: ScoreConditionEnum | undefined = undefined;
+      switch (this.scoringSystem) {
+        case UIScoringSystemEnum.MarkedSquares:
+          scoreCondition = ScoreConditionEnum.MarkedSquares;
+          break;
+        case UIScoringSystemEnum.TotalArea:
+          scoreCondition = ScoreConditionEnum.TotalArea;
+          break;
+        case UIScoringSystemEnum.None:
+          scoreCondition = undefined;
+          break;
+        default:
+          throw new Error(`Unknown scoring system: '${this.scoringSystem}'`);
+      }
+
+      let winCondition: WinConditionEnum;
+      switch (this.winCondition) {
+        case UIWinConditionEnum.NoMovesLeft:
+          winCondition = WinConditionEnum.NoMovesLeft;
+          break;
+        case UIWinConditionEnum.NoMovesHighestScore:
+          winCondition = WinConditionEnum.HighestScore;
+          break;
+        case UIWinConditionEnum.NoMovesLowestScore:
+          winCondition = WinConditionEnum.LowestScore;
+          break;
+        default:
+          throw new Error(`Unknown win condition: '${this.winCondition}'`);
+      }
+      return {
+        winCondition: winCondition,
+        scoreCondition: scoreCondition,
+      };
     },
   },
   methods: {
-    generateLoremIpsum(words: number): string {
-      return generateLoremIpsum(words);
+    updateRuleset(newRuleset: Ruleset) {
+      this.networkRuleset = newRuleset;
     },
     getVisualPlayer(): VisualPlayer | null {
       if (!this.game) return null;
@@ -433,228 +383,6 @@ export default defineComponent({
     },
     actionToString(action: Action): string {
       return actionToString(action);
-    },
-    pingMultiplayerServer() {
-      console.log("Pinging multiplayer server at", `${backendUrl}/ping`);
-
-      fetch(`${backendUrl}/ping`)
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error("Network response was not ok");
-          }
-          return response.text();
-        })
-        .then((data) => {
-          console.log("Ping response:", data);
-        })
-        .catch((error) => {
-          console.error("There was a problem with the fetch operation:", error);
-        });
-    },
-    backendHealthCheck() {
-      return fetch(`${backendUrl}/health/backend`).then((response) => {
-        if (!response.ok) {
-          throw new Error("Network response was not ok");
-        }
-        console.log("Backend health check response:", response);
-        return;
-      });
-    },
-    backendDbHealthCheck() {
-      return fetch(`${backendUrl}/health/db`).then((response) => {
-        if (!response.ok) {
-          throw new Error("Network response was not ok");
-        }
-        console.log("Backend DB health check response:", response);
-        return;
-      });
-    },
-    testWebSocketConnection() {
-      console.log(
-        "Testing WebSocket connection to",
-        websocketUrl,
-        "with path",
-        websocketPath
-      );
-      const socket = io(websocketUrl, {
-        path: websocketPath,
-        transports: ["websocket"],
-      });
-      socket.on("connect_error", (err) => {
-        console.error("Connection error:", err);
-      });
-      // Open and close a connection quickly
-      socket.on("connect", () => {
-        console.log("Connected to server");
-      });
-      socket.on("disconnect", () => {
-        console.log("Disconnected from server");
-      });
-      setTimeout(() => {
-        socket.close();
-        console.log("Closed connection");
-      }, 1000);
-    },
-
-    newSession() {
-      console.log("Creating a new session");
-      const socket = io(websocketUrl, {
-        path: websocketPath,
-        transports: ["websocket"],
-      });
-      socket.on("connect", () => {
-        console.log("Connected to multiplayer server with id", socket.id);
-        this.socket = socket;
-        // Send start session request
-        const startSessionData: StartSessionData = {
-          playerInfo: {
-            uuid: "player-" + Math.random().toString(36).substring(2, 15),
-            name: "Host Player",
-            turnRemainder: 0,
-          },
-          ruleset: {
-            winCondition:
-              this.winCondition == UIWinConditionEnum.NoMovesLeft
-                ? WinCondition.NoMovesLeft
-                : this.winCondition == UIWinConditionEnum.NoMovesHighestScore
-                ? WinCondition.HighestScore
-                : WinCondition.LowestScore,
-            scoreCondition:
-              this.scoringSystem == UIScoringSystemEnum.None
-                ? undefined
-                : this.scoringSystem == UIScoringSystemEnum.MarkedSquares
-                ? ScoreCondition.MarkedSquares
-                : ScoreCondition.TotalArea,
-          },
-        };
-        const startSessionMessage: ClientToServerMessage = {
-          type: ClientToServerMessageType.StartSession,
-          data: startSessionData,
-        };
-        socket.emit(
-          ClientToServerMessageType.StartSession,
-          startSessionMessage
-        ); // Request server start a session
-      });
-      socket.on("disconnect", () => {
-        console.log("Disconnected from multiplayer server");
-        this.socket = undefined;
-      });
-      socket.on(
-        ServerToClientMessageType.StartSuccess,
-        (msg: ServerToClientMessage) => {
-          // Respond to the session started below
-          console.log("Session started:", msg);
-          this.session = (msg.data as ServerToClientMessageData).session;
-        }
-      );
-      socket.on(
-        ServerToClientMessageType.StartFailure,
-        (msg: ServerToClientMessage) => {
-          console.log("Session failed:", msg);
-        }
-      );
-      socket.on(
-        ServerToClientMessageType.SessionUpdated,
-        (msg: ServerToClientMessage) => {
-          console.log("Session updated:", msg);
-          this.session = (msg.data as ServerToClientMessageData).session;
-        }
-      );
-      this.attachNewGameListener();
-    },
-    joinSession(sessionId: string) {
-      console.log("Joining session with ID:", sessionId);
-
-      if (this.socket) {
-        this.socket.close();
-        this.socket = undefined;
-      }
-
-      const socket = io(websocketUrl, {
-        path: websocketPath,
-        transports: ["websocket"],
-      });
-      this.socket = socket;
-
-      socket.on("connect", () => {
-        console.log("Connected to multiplayer server with id", socket.id);
-        this.socket = socket;
-        // Send join session request
-        const joinSessionData: JoinSessionData = {
-          sessionId: sessionId,
-          playerInfo: {
-            uuid: "player-" + Math.random().toString(36).substring(2, 15),
-            name: "Joining Player",
-            turnRemainder: 1,
-          },
-        };
-        const joinSessionMessage: ClientToServerMessage = {
-          type: ClientToServerMessageType.JoinSession,
-          data: joinSessionData,
-        };
-        socket.emit(ClientToServerMessageType.JoinSession, joinSessionMessage); // Request server to join a session
-      });
-      socket.on("disconnect", () => {
-        console.log("Disconnected from multiplayer server");
-        this.socket = undefined;
-      });
-      socket.on(
-        ServerToClientMessageType.JoinSuccess,
-        (msg: ServerToClientMessage) => {
-          // Respond to the session joined below
-          console.log("Session joined:", msg);
-          this.session = (msg.data as ServerToClientMessageData).session;
-        }
-      );
-      this.attachNewGameListener();
-    },
-    attachNewGameListener() {
-      if (!this.socket) return;
-      this.socket.on(
-        ClientToClientMessageType.NewGame,
-        (msg: NewGameMessage) => {
-          console.log("New game message:", msg);
-          const { boards, ruleset } = msg.data;
-          // Set the setup according to the received ruleset
-          this.winCondition =
-            ruleset.winCondition === WinCondition.NoMovesLeft
-              ? UIWinConditionEnum.NoMovesLeft
-              : ruleset.winCondition === WinCondition.HighestScore
-              ? UIWinConditionEnum.NoMovesHighestScore
-              : UIWinConditionEnum.NoMovesLowestScore;
-          this.scoringSystem =
-            ruleset.scoreCondition === undefined
-              ? UIScoringSystemEnum.None
-              : ruleset.scoreCondition === ScoreCondition.MarkedSquares
-              ? UIScoringSystemEnum.MarkedSquares
-              : UIScoringSystemEnum.TotalArea;
-
-          this.newGameWithBoards(boards);
-        }
-      );
-    },
-    attachNetworkActionHandler(turnCallback: (action: TurnData) => void) {
-      if (!this.socket) return;
-      console.log("Attaching network action handler");
-      this.socket.on(ClientToClientMessageType.Turn, (msg: TurnMessage) => {
-        console.log("Player action message:", msg);
-        turnCallback(msg.data);
-      });
-    },
-    detachNetworkActionHandler() {
-      if (!this.socket) return;
-      this.socket.off(ClientToClientMessageType.Turn);
-    },
-    writeSessionIDToClipboard() {
-      if (this.session) {
-        navigator.clipboard.writeText(this.session.id).then(
-          () => {},
-          (err) => {
-            console.error("Could not copy session ID: ", err);
-          }
-        );
-      }
     },
     newGameWithBoards(boards: Board[]) {
       if (
@@ -687,12 +415,16 @@ export default defineComponent({
               console.log(
                 "Network player waiting for action from other player"
               );
-              this.attachNetworkActionHandler((turnData: TurnData) => {
+              (
+                this.$refs.networkSessionSetup as typeof NetworkSessionSetup
+              ).attachNetworkActionHandler((turnData: TurnData) => {
                 console.log(
                   "Network player received action from other player:",
                   turnData
                 );
-                this.detachNetworkActionHandler();
+                (
+                  this.$refs.networkSessionSetup as typeof NetworkSessionSetup
+                ).detachNetworkActionHandler();
                 const boards = Object.values(
                   turnData.sliceResult.boards
                 ).filter((b) => b !== null) as Board[];
@@ -744,34 +476,17 @@ export default defineComponent({
         getActionCallback
       );
 
-      let scoringConditions = [];
-      switch (this.scoringSystem) {
-        case UIScoringSystemEnum.None:
-          break;
-        case UIScoringSystemEnum.MarkedSquares:
-          scoringConditions.push(ScoreCondition.MarkedSquares);
-          break;
-        case UIScoringSystemEnum.TotalArea:
-          scoringConditions.push(ScoreCondition.TotalArea);
-          break;
-        default:
-          throw new Error("Unknown scoring system");
+      let ruleset: Ruleset;
+      if (this.networkRuleset) {
+        console.log(
+          `Using network ruleset: ${JSON.stringify(this.networkRuleset)}`
+        );
+        ruleset = this.networkRuleset;
+      } else {
+        console.log(`Using UI ruleset: ${JSON.stringify(this.uiRuleset)}`);
+        ruleset = this.uiRuleset;
       }
 
-      let winConditions = [];
-      switch (this.winCondition) {
-        case UIWinConditionEnum.NoMovesLeft:
-          winConditions.push(WinCondition.NoMovesLeft);
-          break;
-        case UIWinConditionEnum.NoMovesHighestScore:
-          winConditions.push(WinCondition.HighestScore);
-          break;
-        case UIWinConditionEnum.NoMovesLowestScore:
-          winConditions.push(WinCondition.LowestScore);
-          break;
-        default:
-          throw new Error("Unknown win condition");
-      }
       this.game = new Game<VisualState>(
         new VisualState(
           [visualPlayer.info, otherPlayer.info],
@@ -781,63 +496,27 @@ export default defineComponent({
             (turnResult: TurnResult) => {
               // Post turn updater to emit the slice and turn result to the
               // other player.
-              if (this.socket && this.sessionReady) {
-                if (
-                  this.getVisualPlayer()!.info.uuid !==
-                  turnResult.turn.player.uuid
-                ) {
-                  // Only emit turns made by the visual player (local player)
-                  return;
-                }
-                const sliceResult: SliceResult = turnResult.sliceResult;
-                const turnData: TurnData = {
-                  turn: turnResult.turn,
-                  sliceResult: sliceResult,
-                };
-                const turnMessage: TurnMessage = {
-                  type: ClientToClientMessageType.Turn,
-                  data: turnData,
-                  sessionId: this.session!.id,
-                };
-                console.log("Emitting turn message:", turnMessage);
-                this.socket.emit(ClientToClientMessageType.Turn, turnMessage);
-              }
+              (
+                this.$refs.networkSessionSetup as typeof NetworkSessionSetup
+              ).sendTurnMessage(turnResult);
             },
           ]
         ),
         [visualPlayer, otherPlayer],
-        winConditions,
-        scoringConditions
+        ruleset
       );
-      if (this.sessionReady) {
-        const newGameMessageData: NewGameData = {
-          ruleset: {
-            winCondition:
-              this.winCondition == UIWinConditionEnum.NoMovesLeft
-                ? WinCondition.NoMovesLeft
-                : this.winCondition == UIWinConditionEnum.NoMovesHighestScore
-                ? WinCondition.HighestScore
-                : WinCondition.LowestScore,
-            scoreCondition:
-              this.scoringSystem == UIScoringSystemEnum.None
-                ? undefined
-                : this.scoringSystem == UIScoringSystemEnum.MarkedSquares
-                ? ScoreCondition.MarkedSquares
-                : ScoreCondition.TotalArea,
-          },
-          boards: boards,
-        };
-        const newGameMessage: NewGameMessage = {
-          type: ClientToClientMessageType.NewGame,
-          data: newGameMessageData,
-          sessionId: this.session!.id,
-        };
-        console.log("Emitting new game message:", newGameMessage);
-        this.socket?.emit(ClientToClientMessageType.NewGame, newGameMessage);
-      }
+
       console.log("Starting game play loop");
       console.log("Game:", this.game);
       this.game.playLoop();
+      if (this.otherPlayerType === this.PlayerTypeEnum.Network) {
+        // Send new game message to other player
+        console.log("Sending new game message to other player");
+        console.log(`Ruleset: ${JSON.stringify(this.game.ruleset)}`);
+        (
+          this.$refs.networkSessionSetup as typeof NetworkSessionSetup
+        ).sendNewGameMessage(boards);
+      }
     },
     newGame() {
       const boards = [] as Board[];

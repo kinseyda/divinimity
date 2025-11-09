@@ -1,11 +1,11 @@
 <script lang="ts">
 // Background component that demos a random game being played out on a loop
 import { defineComponent } from "vue";
-import { Game, RandomPlayer } from "../model/BaseModel";
-import { randomBoard, VisualState } from "../model/VisualModel";
+import { Game, randomBoard, RandomPlayer } from "../model/BaseModel";
+import { VisualState } from "../model/VisualModel";
 import "../styles/global.css";
 import GameDisplay from "./GameDisplay.vue";
-import { WinCondition } from "../../../shared";
+import { WinConditionEnum } from "../../../shared";
 
 export default defineComponent({
   components: {
@@ -30,7 +30,7 @@ export default defineComponent({
           () => {}
         ),
         [randomPlayer1, randomPlayer2],
-        [WinCondition.NoMovesLeft],
+        [WinConditionEnum.NoMovesLeft],
         []
       );
       this.game = game;

@@ -1,0 +1,353 @@
+<script lang="ts">
+import { io, type Socket } from "socket.io-client";
+import { defineComponent } from "vue";
+import {
+  ClientToClientMessageType,
+  ClientToServerMessageType,
+  ScoreConditionEnum,
+  ServerToClientMessageType,
+  type Board,
+  type ClientToServerMessage,
+  type JoinSessionData,
+  type NewGameData,
+  type NewGameMessage,
+  type Ruleset,
+  type ServerToClientMessage,
+  type ServerToClientMessageData,
+  type SessionInfo,
+  type StartSessionData,
+  type Turn,
+  type TurnData,
+  type TurnMessage,
+} from "../../../shared";
+import { NetworkRole, WinCondition } from "./GameSetupStore";
+import { Player, type TurnResult } from "../model/BaseModel";
+import { ClipboardIcon } from "lucide-vue-next";
+
+const websocketUrl = import.meta.env.PUBLIC_WEBSOCKET_URL;
+
+if (!websocketUrl) {
+  throw new Error("PUBLIC_WEBSOCKET_URL is not set");
+}
+
+const websocketPath = import.meta.env.PUBLIC_WEBSOCKET_PATH;
+
+if (!websocketPath) {
+  throw new Error("PUBLIC_WEBSOCKET_PATH is not set");
+}
+export default defineComponent({
+  name: "NetworkSessionSetup",
+  components: {
+    ClipboardIcon,
+  },
+  props: {
+    session: {
+      type: Object as () => SessionInfo,
+      required: false,
+    },
+    ruleset: {
+      type: Object as () => Ruleset,
+      required: true,
+    },
+    networkRole: {
+      type: String as () => NetworkRole,
+      required: true,
+    },
+  },
+  emits: [
+    "update:session",
+    "update:ruleset",
+    "update:networkRole",
+    "newGameWithBoards",
+  ],
+  data() {
+    return {
+      NetworkRoleEnum: NetworkRole,
+      networkRoleInput: this.networkRole,
+      socket: undefined as Socket | undefined,
+      sessionIdInput: "" as string,
+    };
+  },
+  methods: {
+    changeNetworkRole(role: string) {
+      this.$emit("update:networkRole", role as NetworkRole);
+    },
+    newSession() {
+      console.log("Creating a new session");
+      const socket = io(websocketUrl, {
+        path: websocketPath,
+        transports: ["websocket"],
+      });
+      socket.on("connect", () => {
+        console.log("Connected to multiplayer server with id", socket.id);
+        this.socket = socket;
+        // Send start session request
+        const startSessionData: StartSessionData = {
+          playerInfo: {
+            uuid: "player-" + Math.random().toString(36).substring(2, 15),
+            name: "Host Player",
+            turnRemainder: 0,
+          },
+          ruleset: this.ruleset!,
+        };
+        const startSessionMessage: ClientToServerMessage = {
+          type: ClientToServerMessageType.StartSession,
+          data: startSessionData,
+        };
+        socket.emit(
+          ClientToServerMessageType.StartSession,
+          startSessionMessage
+        ); // Request server start a session
+      });
+      socket.on("disconnect", () => {
+        console.log("Disconnected from multiplayer server");
+        this.socket = undefined;
+      });
+      socket.on(
+        ServerToClientMessageType.StartSuccess,
+        (msg: ServerToClientMessage) => {
+          // Respond to the session started below
+          console.log("Session started:", msg);
+          this.$emit(
+            "update:session",
+            (msg.data as ServerToClientMessageData).session
+          );
+        }
+      );
+      socket.on(
+        ServerToClientMessageType.StartFailure,
+        (msg: ServerToClientMessage) => {
+          console.log("Session failed:", msg);
+        }
+      );
+      socket.on(
+        ServerToClientMessageType.SessionUpdated,
+        (msg: ServerToClientMessage) => {
+          console.log("Session updated:", msg);
+          this.$emit(
+            "update:session",
+            (msg.data as ServerToClientMessageData).session
+          );
+        }
+      );
+      this.attachNewGameListener();
+    },
+    leaveSession() {
+      if (this.socket) {
+        this.socket.disconnect();
+        this.socket = undefined;
+      }
+      this.$emit("update:session", undefined);
+    },
+    joinSession(sessionId: string) {
+      console.log("Joining session with ID:", sessionId);
+
+      if (this.socket) {
+        this.socket.close();
+        this.socket = undefined;
+      }
+
+      const socket = io(websocketUrl, {
+        path: websocketPath,
+        transports: ["websocket"],
+      });
+      this.socket = socket;
+
+      socket.on("connect", () => {
+        console.log("Connected to multiplayer server with id", socket.id);
+        this.socket = socket;
+        // Send join session request
+        const joinSessionData: JoinSessionData = {
+          sessionId: sessionId,
+          playerInfo: {
+            uuid: "player-" + Math.random().toString(36).substring(2, 15),
+            name: "Joining Player",
+            turnRemainder: 1,
+          },
+        };
+        const joinSessionMessage: ClientToServerMessage = {
+          type: ClientToServerMessageType.JoinSession,
+          data: joinSessionData,
+        };
+        socket.emit(ClientToServerMessageType.JoinSession, joinSessionMessage); // Request server to join a session
+      });
+      socket.on("disconnect", () => {
+        console.log("Disconnected from multiplayer server");
+        this.socket = undefined;
+      });
+      socket.on(
+        ServerToClientMessageType.JoinSuccess,
+        (msg: ServerToClientMessage) => {
+          console.log("Session joined:", msg);
+          this.$emit(
+            "update:session",
+            (msg.data as ServerToClientMessageData).session
+          );
+        }
+      );
+      this.attachNewGameListener();
+    },
+    attachNewGameListener() {
+      if (!this.socket) return;
+      this.socket.on(
+        ClientToClientMessageType.NewGame,
+        (msg: NewGameMessage) => {
+          console.log("New game message:", msg);
+          const { boards, ruleset } = msg.data;
+          console.log(`Received ruleset: ${JSON.stringify(ruleset)}`);
+          this.$emit("update:ruleset", ruleset);
+          this.$emit("newGameWithBoards", boards);
+        }
+      );
+    },
+    attachNetworkActionHandler(turnCallback: (action: TurnData) => void) {
+      if (!this.socket) return;
+      console.log("Attaching network action handler");
+      this.socket.on(ClientToClientMessageType.Turn, (msg: TurnMessage) => {
+        console.log("Player action message:", msg);
+        turnCallback(msg.data);
+      });
+    },
+    detachNetworkActionHandler() {
+      if (!this.socket) return;
+      this.socket.off(ClientToClientMessageType.Turn);
+    },
+    writeSessionIDToClipboard() {
+      if (this.session) {
+        navigator.clipboard.writeText(this.session.id).then(
+          () => {},
+          (err) => {
+            console.error("Could not copy session ID: ", err);
+          }
+        );
+      }
+    },
+    sendNewGameMessage(boards: Board[]) {
+      if (this.sessionReady) {
+        const newGameMessageData: NewGameData = {
+          ruleset: this.ruleset!,
+          boards: boards,
+        };
+        const newGameMessage: NewGameMessage = {
+          type: ClientToClientMessageType.NewGame,
+          data: newGameMessageData,
+          sessionId: this.session!.id,
+        };
+        console.log("Emitting new game message:", newGameMessage);
+        this.socket?.emit(ClientToClientMessageType.NewGame, newGameMessage);
+      }
+    },
+    sendTurnMessage(turnResult: TurnResult) {
+      if (this.sessionReady) {
+        const turnMessageData: TurnData = {
+          turn: turnResult.turn,
+          sliceResult: turnResult.sliceResult,
+        };
+        const turnMessage: TurnMessage = {
+          type: ClientToClientMessageType.Turn,
+          data: turnMessageData,
+          sessionId: this.session!.id,
+        };
+        console.log("Emitting turn message:", turnMessage);
+        this.socket?.emit(ClientToClientMessageType.Turn, turnMessage);
+      }
+    },
+  },
+  setup() {
+    return {};
+  },
+  computed: {
+    sessionReady(): boolean {
+      // A session is ready if we have a session with two players
+      return this.session !== undefined && this.session.players.length >= 2;
+    },
+  },
+});
+</script>
+<template>
+  <fieldset class="fieldset">
+    <select
+      class="select"
+      v-model="networkRoleInput"
+      @change="changeNetworkRole(networkRoleInput)"
+      :disabled="session !== undefined"
+    >
+      <option :value="NetworkRoleEnum.NetworkInitiator">Host a new game</option>
+      <option :value="NetworkRoleEnum.NetworkJoiner">Join a game</option>
+    </select>
+  </fieldset>
+  <fieldset
+    class="fieldset"
+    v-if="networkRole === NetworkRoleEnum.NetworkJoiner"
+  >
+    <label class="label">
+      <span class="label-text">Session ID</span>
+    </label>
+    <input
+      type="text"
+      placeholder="Enter Session ID"
+      class="input input-bordered w-full"
+      v-model="sessionIdInput"
+      :disabled="session !== undefined"
+    />
+    <button
+      class="btn btn-success btn-sm mt-2"
+      :disabled="session !== undefined || !sessionIdInput"
+      @click="joinSession(sessionIdInput!)"
+    >
+      Join Session
+    </button>
+  </fieldset>
+  <fieldset
+    class="fieldset"
+    v-if="networkRole === NetworkRoleEnum.NetworkInitiator"
+  >
+    <legend class="fieldset-legend">Create a New Session:</legend>
+    <button
+      class="btn btn-success btn-sm mt-2"
+      @click="newSession"
+      :disabled="session !== undefined"
+    >
+      New Session
+    </button>
+    <legend class="fieldset-legend">Your Session ID:</legend>
+    <label class="input input-bordered w-full">
+      <input
+        type="text"
+        :value="session ? session!.id : ''"
+        class="font-mono"
+        readonly
+      />
+      <ClipboardIcon
+        class="size-4 ml-2 cursor-pointer"
+        :title="sessionReady ? 'Copy Session ID to clipboard' : ''"
+        @click="writeSessionIDToClipboard()"
+      />
+    </label>
+  </fieldset>
+  <fieldset
+    class="fieldset"
+    v-if="
+      (networkRole === NetworkRoleEnum.NetworkInitiator ||
+        networkRole === NetworkRoleEnum.NetworkJoiner) &&
+      session
+    "
+  >
+    <legend class="fieldset-legend">Connected Players:</legend>
+    <ul class="list-disc list-inside">
+      <li v-for="player in session ? session.players : []" :key="player.uuid">
+        Player {{ player.turnRemainder + 1 }}: {{ player.name }} ({{
+          player.uuid
+        }})
+      </li>
+    </ul>
+    <button
+      class="btn btn-error btn-sm mt-2 w-fit place-self-end"
+      :class="{ disabled: !session }"
+      @click="leaveSession()"
+    >
+      Leave Session
+    </button>
+  </fieldset>
+</template>
+<style scoped></style>

@@ -53,7 +53,7 @@ export interface TurnMessage extends ClientToClientMessage {
 
 export interface TurnData {
   turn: Turn;
-  sliceResult: SliceResult; 
+  sliceResult: SliceResult;
 }
 
 export interface SliceResult {
@@ -80,20 +80,20 @@ export interface SessionInfo {
   players: PlayerInfo[];
 }
 
-export enum WinCondition {
+export enum WinConditionEnum {
   NoMovesLeft,
   HighestScore,
   LowestScore,
 }
 
-export enum ScoreCondition {
+export enum ScoreConditionEnum {
   MarkedSquares,
   TotalArea,
 }
 
 export interface Ruleset {
-  winCondition: WinCondition;
-  scoreCondition?: ScoreCondition;
+  winCondition: WinConditionEnum;
+  scoreCondition?: ScoreConditionEnum;
 }
 
 export interface ServerToClientMessageData {

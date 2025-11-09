@@ -1,16 +1,16 @@
 <script lang="ts">
 import { defineComponent, type PropType } from "vue";
-import { ScoreCondition, WinCondition } from "../../../shared";
+import {
+  ScoreConditionEnum,
+  WinConditionEnum,
+  type Ruleset,
+} from "../../../shared";
 
 export default defineComponent({
   components: {},
   props: {
-    winConditions: {
-      type: Array as PropType<WinCondition[]>,
-      required: true,
-    },
-    scoreConditions: {
-      type: Array as PropType<ScoreCondition[]>,
+    ruleset: {
+      type: Object as () => Ruleset,
       required: true,
     },
   },
@@ -18,7 +18,35 @@ export default defineComponent({
     return {};
   },
   emits: {},
-  methods: {},
+  methods: {
+    winconditionToString(winCondition: WinConditionEnum): string {
+      switch (winCondition) {
+        case WinConditionEnum.NoMovesLeft:
+          return "No Moves Left";
+        case WinConditionEnum.HighestScore:
+          return "Highest Score";
+        case WinConditionEnum.LowestScore:
+          return "Lowest Score";
+        default:
+          return "Unknown Win Condition";
+      }
+    },
+    scoreConditionToString(
+      scoreCondition: ScoreConditionEnum | undefined
+    ): string {
+      if (scoreCondition === undefined) {
+        return "None";
+      }
+      switch (scoreCondition) {
+        case ScoreConditionEnum.MarkedSquares:
+          return "Marked Squares";
+        case ScoreConditionEnum.TotalArea:
+          return "Total Area";
+        default:
+          return "Unknown Score Condition";
+      }
+    },
+  },
   setup() {
     return {};
   },
@@ -28,21 +56,9 @@ export default defineComponent({
   <div class="flex flex-col gap-1">
     <span class="font-bold text-lg">Current Game Rules:</span>
     <ul class="list-disc list-inside">
-      <li>
-        Win condition: {{ winConditions[0] }}
-        <ul>
-          <li>
-            {{ winConditions[0] }}
-          </li>
-        </ul>
-      </li>
-      <li v-if="scoreConditions.length > 0">
-        Scoring: {{ scoreConditions[0] }}
-        <ul>
-          <li>
-            {{ scoreConditions[0] }}
-          </li>
-        </ul>
+      <li>Win condition: {{ winconditionToString(ruleset.winCondition) }}</li>
+      <li v-if="ruleset.scoreCondition !== undefined">
+        Scoring: {{ scoreConditionToString(ruleset.scoreCondition) }}
       </li>
       <li v-else>Scoring: None</li>
     </ul>

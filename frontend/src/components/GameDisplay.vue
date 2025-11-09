@@ -656,7 +656,7 @@ export default defineComponent({
     :playerState="getPlayerState()"
   />
   <ScoreDisplay
-    v-if="interactive && game.scoreConditions.length > 0"
+    v-if="interactive && game.ruleset.scoreCondition !== undefined"
     class="alert absolute left-1/2 -translate-x-1/2 bottom-4 pointer-events-none"
     :gameState="game.state"
   />

@@ -7,9 +7,10 @@ import {
   type Slice,
   type TileCoordinate,
   type Turn,
-  WinCondition as WinConditionEnum,
-  ScoreCondition as ScoreConditionEnum,
+  WinConditionEnum as WinConditionEnum,
+  ScoreConditionEnum as ScoreConditionEnum,
   type SliceResult,
+  type Ruleset,
 } from "../../../shared";
 
 export function tileCoordinateToString(coord: TileCoordinate): string {
@@ -123,13 +124,13 @@ export function actionToString(action: Action): string {
   }}`;
 }
 
-export interface Rule {
+export interface GameRule {
   name: string;
   description: string;
   condition: Function;
 }
 
-interface WinCondition<TState extends BaseState> extends Rule {
+interface WinCondition<TState extends BaseState> extends GameRule {
   // A win condition determines if the game is over, and if it is, who the
   // winner is (or winners, in case of multiple, such as a tie).
   condition: (state: TState) => PlayerInfo[] | null; // Returns the info of the winning player, or null if no winner yet
@@ -208,7 +209,7 @@ const NoMovesLowestScoreWinCondition: WinCondition<BaseState> = {
     "The game ends when a player has no valid moves available. The player with the lowest score wins.",
 };
 
-interface ScoreCondition extends Rule {
+interface ScoreCondition extends GameRule {
   // A score condition determines if a slice results in points being awarded to
   // a player, and if so, how many points.
   condition: (turnResult: TurnResult) => Map<string, number> | undefined; // Returns a map of PlayerInfo.uuid to score change, or undefined if no score change
@@ -477,33 +478,31 @@ export class Game<TState extends BaseState> {
   winConditions: WinCondition<BaseState>[];
   scoreConditions: ScoreCondition[];
 
+  public ruleset: Ruleset;
+
   constructor(
     initialState: TState,
     players: Player<TState>[],
-    winConditions: WinConditionEnum[],
-    scoreConditions: ScoreConditionEnum[]
+    ruleset: Ruleset
   ) {
     this.state = initialState;
+    this.ruleset = ruleset;
     this.players = players;
     this.players.sort((a, b) => a.info.turnRemainder - b.info.turnRemainder);
-    this.winConditions = winConditions.map((wc) => {
-      switch (wc) {
-        case WinConditionEnum.NoMovesLeft:
-          return NoMovesWinCondition;
-        case WinConditionEnum.HighestScore:
-          return NoMovesHighestScoreWinCondition;
-        case WinConditionEnum.LowestScore:
-          return NoMovesLowestScoreWinCondition;
-      }
-    });
-    this.scoreConditions = scoreConditions.map((sc) => {
-      switch (sc) {
-        case ScoreConditionEnum.MarkedSquares:
-          return MarkedSquaresScoreCondition;
-        case ScoreConditionEnum.TotalArea:
-          return TotalAreaScoreCondition;
-      }
-    });
+    this.winConditions = [
+      ruleset.winCondition == WinConditionEnum.HighestScore
+        ? NoMovesHighestScoreWinCondition
+        : ruleset.winCondition == WinConditionEnum.LowestScore
+        ? NoMovesLowestScoreWinCondition
+        : NoMovesWinCondition,
+    ];
+    this.scoreConditions = ruleset.scoreCondition
+      ? [
+          ruleset.scoreCondition == ScoreConditionEnum.TotalArea
+            ? TotalAreaScoreCondition
+            : MarkedSquaresScoreCondition,
+        ]
+      : [];
   }
 
   get availableActions(): Action[] {

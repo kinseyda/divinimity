@@ -4,15 +4,14 @@ import { Server } from "socket.io";
 import {
   ClientToClientMessage,
   ClientToClientMessageType,
+  ClientToServerMessage,
   ClientToServerMessageType,
   JoinSessionData,
-  JoinSessionMessage,
   ServerToClientMessage,
   ServerToClientMessageData,
   ServerToClientMessageType,
   SessionInfo,
   StartSessionData,
-  StartSessionMessage,
 } from "../../shared";
 import { getConnection } from "./db-utils";
 
@@ -22,9 +21,15 @@ const port = process.env.PORT || 3000;
 const devOrigins = [];
 const allOrigins = [...allowedOrigins, ...devOrigins];
 
+interface NetworkPlayerConnection {
+  socketId: string;
+  playerUuid: string;
+}
+
 interface SessionStoreEntry {
+  // Session entries are basically sockets.io rooms with some metadata
   session: SessionInfo;
-  sockets: string[]; // set of socket IDs connected to this session
+  connections: NetworkPlayerConnection[]; // list of player connections in the session
 }
 
 const sessionStore: Map<string, SessionStoreEntry> = new Map();
@@ -36,12 +41,27 @@ function updateSessionTimestamp(sessionId: string) {
   }
 }
 
-function updateSession(session: SessionInfo) {
+function updateSession(entry: SessionStoreEntry) {
+  console.log("Updating session:", entry);
+  const {
+    session: { id: sessionId },
+  } = entry;
+  if (!sessionId) return;
+
   // For updating session info in the store, such as adding or removing players
-  const entry = sessionStore.get(session.id);
-  if (entry) {
-    entry.session = session;
-    updateSessionTimestamp(session.id);
+  const oldEntry = sessionStore.get(sessionId);
+  if (oldEntry) {
+    sessionStore.set(sessionId, entry);
+    updateSessionTimestamp(sessionId);
+    // Notify all clients in the session that it is updated
+    console.log(`Notifying session ${sessionId} of update`);
+    const SessionUpdatedMessageData: ServerToClientMessageData = {
+      session: entry.session,
+    };
+    io.to(sessionId).emit(ServerToClientMessageType.SessionUpdated, {
+      type: ServerToClientMessageType.SessionUpdated,
+      data: SessionUpdatedMessageData,
+    });
   }
 }
 
@@ -52,10 +72,10 @@ function relayMessageToSession(
 ) {
   const entry = sessionStore.get(sessionId);
   if (entry) {
-    entry.sockets.forEach((socketId) => {
-      if (socketId !== originSocketId) {
-        console.log("Relaying message to socket:", socketId, message);
-        io.to(socketId).emit(message.type, message);
+    entry.connections.forEach((player) => {
+      if (player.socketId !== originSocketId) {
+        console.log("Relaying message to socket:", player.socketId, message);
+        io.to(player.socketId).emit(message.type, message);
         updateSessionTimestamp(sessionId);
       }
     });
@@ -124,22 +144,40 @@ const io = new Server(server, {
 });
 io.on("connection", (socket) => {
   console.log("a user connected");
+  socket.on("disconnect", (reason) => {
+    console.log("user disconnected");
+    // Remove the player from the connections list and the session players
+    // list. TODO optimize this, store a map of socketId to sessionIds (?).
+    // Only necessary when there are many simultaneous sessions
+    sessionStore.forEach((entry, sessionId) => {
+      console.log(
+        "Checking disconnect for session:",
+        sessionId,
+        socket.id,
+        entry.connections
+      );
+      const playerIndex = entry.connections.findIndex(
+        (p) => p.socketId === socket.id
+      );
+      if (playerIndex !== -1) {
+        console.log(
+          `Removing player ${entry.connections[playerIndex].playerUuid} from session ${sessionId} due to disconnect`
+        );
 
+        const newEntry = structuredClone(entry);
+        const playerUuid = newEntry.connections[playerIndex].playerUuid;
+        newEntry.connections.splice(playerIndex, 1);
+        newEntry.session.players = newEntry.session.players.filter(
+          (p) => p.uuid !== playerUuid
+        );
+
+        updateSession(newEntry);
+      }
+    });
+  });
   socket.onAny((event, msg) => {
-    if (event === "disconnect") {
-      console.log("user disconnected");
-      // Remove socket from any sessions it was part of
-      // TODO optimize this, store a map of socketId to sessionIds (?)
-      sessionStore.forEach((entry, sessionId) => {
-        const index = entry.sockets.indexOf(socket.id);
-        if (index !== -1) {
-          entry.sockets.splice(index, 1);
-          updateSessionTimestamp(sessionId);
-        }
-      });
-    }
     console.log("Received client message:", msg);
-    switch (msg.type) {
+    switch ((msg as ClientToClientMessage | ClientToServerMessage).type) {
       default:
         console.log(`Unknown message type: ${msg.type}`);
         break;
@@ -162,7 +200,7 @@ io.on("connection", (socket) => {
         };
         sessionStore.set(sessionId, {
           session: newSession,
-          sockets: [socket.id],
+          connections: [{ socketId: socket.id, playerUuid: playerInfo.uuid }],
         });
         socket.join(sessionId);
         const startSuccessMessageData: ServerToClientMessageData = {
@@ -183,32 +221,24 @@ io.on("connection", (socket) => {
           msg.data as JoinSessionData;
         const entry = sessionStore.get(joinSessionId);
         if (entry) {
-          entry.sockets.push(socket.id);
+          const newEntry = structuredClone(entry);
+          newEntry.connections.push({
+            socketId: socket.id,
+            playerUuid: joinPlayerInfo.uuid,
+          });
           socket.join(joinSessionId);
-          entry.session.players.push(joinPlayerInfo);
-          updateSessionTimestamp(joinSessionId);
+          newEntry.session.players.push(joinPlayerInfo);
+
+          updateSession(newEntry);
+
           const successMessageData: ServerToClientMessageData = {
-            session: entry.session,
+            session: newEntry.session,
           };
           const successMessage: ServerToClientMessage = {
             type: ServerToClientMessageType.JoinSuccess,
             data: successMessageData,
           };
-          console.log("Successfully joined session:", entry.session);
           socket.emit(ServerToClientMessageType.JoinSuccess, successMessage);
-
-          // Notify all clients in the session that it is ready
-          const SessionUpdatedMessageData: ServerToClientMessageData = {
-            session: entry.session,
-          };
-          const SessionUpdatedMessage: ServerToClientMessage = {
-            type: ServerToClientMessageType.SessionUpdated,
-            data: SessionUpdatedMessageData,
-          };
-          io.to(joinSessionId).emit(
-            ServerToClientMessageType.SessionUpdated,
-            SessionUpdatedMessage
-          );
         } else {
           socket.emit(
             ServerToClientMessageType.JoinFailure,

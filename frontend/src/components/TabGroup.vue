@@ -11,6 +11,7 @@ export default defineComponent({
     },
     groupName: { type: String, required: true },
     modelValue: { type: String, required: true },
+    disabled: { type: Boolean, required: false, default: false },
   },
   emits: ["update:modelValue"],
   data() {
@@ -39,6 +40,7 @@ export default defineComponent({
         :aria-label="tabName"
         :checked="index === activeTab"
         @change="changeTab(index)"
+        :disabled="disabled"
       />
       <div class="tab-content">
         <slot :name="tabName" />

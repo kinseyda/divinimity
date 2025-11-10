@@ -65,15 +65,16 @@
                       <CircleQuestionMarkIcon class="inline-block" />
                       <span>Help</span>
                     </div>
-                    <div class="collapse-content text-sm">
+                    <div
+                      class="collapse-content text-sm max-h-48 overflow-auto"
+                    >
                       <RulesDescription :ruleset="game.ruleset" />
                     </div>
                   </div>
                 </div>
               </template>
               <template v-slot:Info>
-                You will be able to see statistics about the current game and
-                the players here.
+                <RulesetDisplay :ruleset="game.ruleset" />
               </template>
               <template v-slot:Analysis>
                 You will be able to see analysis of the current game here.
@@ -87,6 +88,10 @@
           :titles="['Players', 'Rules', 'Boards']"
           groupName="setupTabs"
           v-model="activeTabSetup"
+          :disabled="
+            otherPlayerType === PlayerTypeEnum.Network &&
+            networkRole === NetworkRoleEnum.NetworkJoiner
+          "
         >
           <template v-slot:Players>
             <TabGroup
@@ -171,6 +176,12 @@
           :for="gameSetupDrawerId"
           @click="newGame"
           class="btn btn-primary btn-lg fixed bottom-0 right-0 m-8"
+          :class="
+            otherPlayerType === PlayerTypeEnum.Network &&
+            (networkRole === NetworkRoleEnum.NetworkJoiner || !sessionReady())
+              ? 'btn-disabled'
+              : ''
+          "
         >
           New Game <PlayIcon />
         </label>
@@ -187,29 +198,16 @@ import {
   PencilRulerIcon,
   PlayIcon,
 } from "lucide-vue-next";
-import { io, Socket } from "socket.io-client";
 import { defineComponent } from "vue";
 import {
-  ClientToClientMessageType,
-  ClientToServerMessageType,
   ScoreConditionEnum,
-  ServerToClientMessageType,
   WinConditionEnum,
   type Action,
   type Board,
-  type ClientToServerMessage,
-  type JoinSessionData,
-  type NewGameData,
-  type NewGameMessage,
   type Ruleset,
-  type ServerToClientMessage,
-  type ServerToClientMessageData,
   type SessionInfo,
   type Slice,
-  type SliceResult,
-  type StartSessionData,
   type TurnData,
-  type TurnMessage,
 } from "../../../shared";
 import {
   actionToString,
@@ -220,7 +218,6 @@ import {
   RandomPlayer,
   type TurnResult,
 } from "../model/BaseModel";
-import { generateLoremIpsum } from "../model/StyleUtils";
 import { VisualPlayer, VisualState } from "../model/VisualModel";
 import DrawerContent from "./DrawerContent.vue";
 import GameDisplay from "./GameDisplay.vue";
@@ -232,11 +229,12 @@ import {
   ScoringSystem as UIScoringSystemEnum,
   WinCondition as UIWinConditionEnum,
 } from "./GameSetupStore";
+import NetworkSessionSetup from "./NetworkSessionSetup.vue";
 import RulesDescription from "./RulesDescription.vue";
 import TabGroup from "./TabGroup.vue";
 import TurnIndicator from "./TurnIndicator.vue";
 import { uiStore } from "./UIStore";
-import NetworkSessionSetup from "./NetworkSessionSetup.vue";
+import RulesetDisplay from "./RulesetDisplay.vue";
 
 const backendUrl = import.meta.env.PUBLIC_BACKEND_URL;
 
@@ -281,6 +279,7 @@ export default defineComponent({
     TurnIndicator,
     RulesDescription,
     NetworkSessionSetup,
+    RulesetDisplay,
   },
   emits: {},
   data() {
@@ -321,12 +320,6 @@ export default defineComponent({
     this.newGame();
   },
   computed: {
-    sessionReady(): boolean {
-      return this.$refs.networkSessionSetup
-        ? (this.$refs.networkSessionSetup as typeof NetworkSessionSetup)
-            .sessionReady
-        : false;
-    },
     uiRuleset(): Ruleset {
       let scoreCondition: ScoreConditionEnum | undefined = undefined;
       switch (this.scoringSystem) {
@@ -364,6 +357,13 @@ export default defineComponent({
     },
   },
   methods: {
+    sessionReady(): boolean {
+      // Use sessionReady from NetworkSessionSetup component
+      return this.$refs.networkSessionSetup
+        ? (this.$refs.networkSessionSetup as typeof NetworkSessionSetup)
+            .sessionReady
+        : false;
+    },
     updateRuleset(newRuleset: Ruleset) {
       this.networkRuleset = newRuleset;
     },
@@ -387,9 +387,9 @@ export default defineComponent({
     newGameWithBoards(boards: Board[]) {
       if (
         this.otherPlayerType === this.PlayerTypeEnum.Network &&
-        !this.sessionReady
+        !this.sessionReady()
       ) {
-        console.log("Cannot start network game: session not ready");
+        console.error("Cannot start network game: session not ready");
         return;
       }
       let otherPlayer;
@@ -412,16 +412,9 @@ export default defineComponent({
 
           const getNetworkActionCallback = (state: BaseState) => {
             return new Promise<[Action, Board[] | undefined]>((resolve) => {
-              console.log(
-                "Network player waiting for action from other player"
-              );
               (
                 this.$refs.networkSessionSetup as typeof NetworkSessionSetup
               ).attachNetworkActionHandler((turnData: TurnData) => {
-                console.log(
-                  "Network player received action from other player:",
-                  turnData
-                );
                 (
                   this.$refs.networkSessionSetup as typeof NetworkSessionSetup
                 ).detachNetworkActionHandler();
@@ -478,12 +471,8 @@ export default defineComponent({
 
       let ruleset: Ruleset;
       if (this.networkRuleset) {
-        console.log(
-          `Using network ruleset: ${JSON.stringify(this.networkRuleset)}`
-        );
         ruleset = this.networkRuleset;
       } else {
-        console.log(`Using UI ruleset: ${JSON.stringify(this.uiRuleset)}`);
         ruleset = this.uiRuleset;
       }
 
@@ -506,13 +495,9 @@ export default defineComponent({
         ruleset
       );
 
-      console.log("Starting game play loop");
-      console.log("Game:", this.game);
       this.game.playLoop();
       if (this.otherPlayerType === this.PlayerTypeEnum.Network) {
         // Send new game message to other player
-        console.log("Sending new game message to other player");
-        console.log(`Ruleset: ${JSON.stringify(this.game.ruleset)}`);
         (
           this.$refs.networkSessionSetup as typeof NetworkSessionSetup
         ).sendNewGameMessage(boards);

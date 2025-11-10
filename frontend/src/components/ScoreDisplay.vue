@@ -21,7 +21,7 @@ export default defineComponent({
 });
 </script>
 <template>
-  <span class="stats bg-base-200 shadow border-2 border-primary">
+  <span class="stats">
     <div
       v-for="player in gameState.players"
       :key="player.uuid"

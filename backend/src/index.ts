@@ -42,7 +42,6 @@ function updateSessionTimestamp(sessionId: string) {
 }
 
 function updateSession(entry: SessionStoreEntry) {
-  console.log("Updating session:", entry);
   const {
     session: { id: sessionId },
   } = entry;
@@ -54,7 +53,6 @@ function updateSession(entry: SessionStoreEntry) {
     sessionStore.set(sessionId, entry);
     updateSessionTimestamp(sessionId);
     // Notify all clients in the session that it is updated
-    console.log(`Notifying session ${sessionId} of update`);
     const SessionUpdatedMessageData: ServerToClientMessageData = {
       session: entry.session,
     };
@@ -74,7 +72,6 @@ function relayMessageToSession(
   if (entry) {
     entry.connections.forEach((player) => {
       if (player.socketId !== originSocketId) {
-        console.log("Relaying message to socket:", player.socketId, message);
         io.to(player.socketId).emit(message.type, message);
         updateSessionTimestamp(sessionId);
       }
@@ -132,7 +129,6 @@ app.get(`/health/db`, async (_, res) => {
 
 const server = app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-  console.log(`Allowed origins: ${allOrigins}`);
 });
 
 const io = new Server(server, {
@@ -143,9 +139,9 @@ const io = new Server(server, {
   },
 });
 io.on("connection", (socket) => {
-  console.log("a user connected");
+  console.log("a user connected:", socket.id);
   socket.on("disconnect", (reason) => {
-    console.log("user disconnected");
+    console.log("user disconnected:", socket.id, "reason:", reason);
     // Remove the player from the connections list and the session players
     // list. TODO optimize this, store a map of socketId to sessionIds (?).
     // Only necessary when there are many simultaneous sessions

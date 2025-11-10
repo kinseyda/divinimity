@@ -1,10 +1,10 @@
 <script lang="ts">
+import { ClipboardIcon } from "lucide-vue-next";
 import { io, type Socket } from "socket.io-client";
 import { defineComponent } from "vue";
 import {
   ClientToClientMessageType,
   ClientToServerMessageType,
-  ScoreConditionEnum,
   ServerToClientMessageType,
   type Board,
   type ClientToServerMessage,
@@ -16,13 +16,11 @@ import {
   type ServerToClientMessageData,
   type SessionInfo,
   type StartSessionData,
-  type Turn,
   type TurnData,
   type TurnMessage,
 } from "../../../shared";
-import { NetworkRole, WinCondition } from "./GameSetupStore";
-import { Player, type TurnResult } from "../model/BaseModel";
-import { ClipboardIcon } from "lucide-vue-next";
+import { type TurnResult } from "../model/BaseModel";
+import { NetworkRole } from "./GameSetupStore";
 
 const websocketUrl = import.meta.env.PUBLIC_WEBSOCKET_URL;
 
@@ -73,13 +71,11 @@ export default defineComponent({
       this.$emit("update:networkRole", role as NetworkRole);
     },
     newSession() {
-      console.log("Creating a new session");
       const socket = io(websocketUrl, {
         path: websocketPath,
         transports: ["websocket"],
       });
       socket.on("connect", () => {
-        console.log("Connected to multiplayer server with id", socket.id);
         this.socket = socket;
         // Send start session request
         const startSessionData: StartSessionData = {
@@ -100,14 +96,13 @@ export default defineComponent({
         ); // Request server start a session
       });
       socket.on("disconnect", () => {
-        console.log("Disconnected from multiplayer server");
+        console.error("Disconnected from multiplayer server");
         this.socket = undefined;
       });
       socket.on(
         ServerToClientMessageType.StartSuccess,
         (msg: ServerToClientMessage) => {
           // Respond to the session started below
-          console.log("Session started:", msg);
           this.$emit(
             "update:session",
             (msg.data as ServerToClientMessageData).session
@@ -117,13 +112,12 @@ export default defineComponent({
       socket.on(
         ServerToClientMessageType.StartFailure,
         (msg: ServerToClientMessage) => {
-          console.log("Session failed:", msg);
+          console.error("Session failed:", msg);
         }
       );
       socket.on(
         ServerToClientMessageType.SessionUpdated,
         (msg: ServerToClientMessage) => {
-          console.log("Session updated:", msg);
           this.$emit(
             "update:session",
             (msg.data as ServerToClientMessageData).session
@@ -140,8 +134,6 @@ export default defineComponent({
       this.$emit("update:session", undefined);
     },
     joinSession(sessionId: string) {
-      console.log("Joining session with ID:", sessionId);
-
       if (this.socket) {
         this.socket.close();
         this.socket = undefined;
@@ -154,7 +146,6 @@ export default defineComponent({
       this.socket = socket;
 
       socket.on("connect", () => {
-        console.log("Connected to multiplayer server with id", socket.id);
         this.socket = socket;
         // Send join session request
         const joinSessionData: JoinSessionData = {
@@ -172,13 +163,11 @@ export default defineComponent({
         socket.emit(ClientToServerMessageType.JoinSession, joinSessionMessage); // Request server to join a session
       });
       socket.on("disconnect", () => {
-        console.log("Disconnected from multiplayer server");
         this.socket = undefined;
       });
       socket.on(
         ServerToClientMessageType.JoinSuccess,
         (msg: ServerToClientMessage) => {
-          console.log("Session joined:", msg);
           this.$emit(
             "update:session",
             (msg.data as ServerToClientMessageData).session
@@ -192,9 +181,7 @@ export default defineComponent({
       this.socket.on(
         ClientToClientMessageType.NewGame,
         (msg: NewGameMessage) => {
-          console.log("New game message:", msg);
           const { boards, ruleset } = msg.data;
-          console.log(`Received ruleset: ${JSON.stringify(ruleset)}`);
           this.$emit("update:ruleset", ruleset);
           this.$emit("newGameWithBoards", boards);
         }
@@ -202,9 +189,7 @@ export default defineComponent({
     },
     attachNetworkActionHandler(turnCallback: (action: TurnData) => void) {
       if (!this.socket) return;
-      console.log("Attaching network action handler");
       this.socket.on(ClientToClientMessageType.Turn, (msg: TurnMessage) => {
-        console.log("Player action message:", msg);
         turnCallback(msg.data);
       });
     },
@@ -233,7 +218,6 @@ export default defineComponent({
           data: newGameMessageData,
           sessionId: this.session!.id,
         };
-        console.log("Emitting new game message:", newGameMessage);
         this.socket?.emit(ClientToClientMessageType.NewGame, newGameMessage);
       }
     },
@@ -248,7 +232,6 @@ export default defineComponent({
           data: turnMessageData,
           sessionId: this.session!.id,
         };
-        console.log("Emitting turn message:", turnMessage);
         this.socket?.emit(ClientToClientMessageType.Turn, turnMessage);
       }
     },

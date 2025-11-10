@@ -26,6 +26,7 @@ import {
 import TurnIndicator, { PlayerState } from "./TurnIndicator.vue";
 import ScoreDisplay from "./ScoreDisplay.vue";
 import { Direction } from "../../../shared";
+import RulesetDisplay from "./RulesetDisplay.vue";
 
 function placeAroundCenter(
   boards: PaperBoard[],
@@ -56,6 +57,7 @@ export default defineComponent({
     PaperCanvasFull,
     TurnIndicator,
     ScoreDisplay,
+    RulesetDisplay,
     MoveIcon,
   },
   data() {
@@ -652,13 +654,18 @@ export default defineComponent({
   </div>
   <TurnIndicator
     v-if="interactive"
-    class="alert absolute left-1/2 -translate-x-1/2 top-4 pointer-events-none"
+    class="alert absolute left-1/2 -translate-x-1/2 top-4 hover-transparency"
     :playerState="getPlayerState()"
   />
   <ScoreDisplay
     v-if="interactive && game.ruleset.scoreCondition !== undefined"
-    class="alert absolute left-1/2 -translate-x-1/2 bottom-4 pointer-events-none"
+    class="bg-base-200 shadow border-2 border-primary rounded-xl alert absolute left-1/2 -translate-x-1/2 bottom-4 hover-transparency"
     :gameState="game.state"
+  />
+  <RulesetDisplay
+    v-if="interactive"
+    :ruleset="game.ruleset"
+    class="bg-base-200 shadow border-2 border-primary rounded-xl alert absolute left-4 top-4 hover-transparency hidden lg:block"
   />
 </template>
 <style scoped></style>

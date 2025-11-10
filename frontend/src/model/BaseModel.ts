@@ -496,13 +496,14 @@ export class Game<TState extends BaseState> {
         ? NoMovesLowestScoreWinCondition
         : NoMovesWinCondition,
     ];
-    this.scoreConditions = ruleset.scoreCondition
-      ? [
-          ruleset.scoreCondition == ScoreConditionEnum.TotalArea
-            ? TotalAreaScoreCondition
-            : MarkedSquaresScoreCondition,
-        ]
-      : [];
+    this.scoreConditions =
+      ruleset.scoreCondition !== undefined
+        ? [
+            ruleset.scoreCondition == ScoreConditionEnum.TotalArea
+              ? TotalAreaScoreCondition
+              : MarkedSquaresScoreCondition,
+          ]
+        : [];
   }
 
   get availableActions(): Action[] {
@@ -629,14 +630,9 @@ export class Game<TState extends BaseState> {
 
     this.state = newState;
     this.state.turnHistory.push(turn);
-    console.log(
-      `Board UUIDs after turn ${this.state.turnHistory.length}:`,
-      Object.keys(this.state.boards)
-    );
   }
 
   public async playLoop(): Promise<void> {
-    console.log(`starting board UUIDs:`, Object.keys(this.state.boards));
     while (true) {
       const currentPlayer = this.currentPlayer();
       if (!currentPlayer) throw new Error("No current player found");

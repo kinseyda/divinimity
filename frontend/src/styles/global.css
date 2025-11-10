@@ -2,3 +2,7 @@
 @plugin "daisyui" {
   themes: fantasy --preferslight, coffee --prefersdark;
 }
+
+.hover-transparency {
+  @apply hover:opacity-30 transition-opacity duration-100 select-none;
+}

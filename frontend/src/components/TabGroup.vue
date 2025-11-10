@@ -16,7 +16,7 @@ export default defineComponent({
   emits: ["update:modelValue"],
   data() {
     return {
-      activeTab: 0,
+      activeTab: this.titles.indexOf(this.modelValue) || 0,
     };
   },
   methods: {
@@ -24,9 +24,6 @@ export default defineComponent({
       this.activeTab = index;
       this.$emit("update:modelValue", this.titles[index]);
     },
-  },
-  setup() {
-    return {};
   },
 });
 </script>
@@ -42,7 +39,7 @@ export default defineComponent({
         @change="changeTab(index)"
         :disabled="disabled"
       />
-      <div class="tab-content">
+      <div class="tab-content mt-2">
         <slot :name="tabName" />
       </div>
     </template>

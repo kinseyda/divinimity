@@ -1,41 +1,25 @@
-export enum Direction {
-  Horizontal,
-  Vertical,
-}
-
-export interface Slice {
-  // A slice is a single cut along a grid line, between two rows or two columns
-  // of tiles. It is defined by its direction (horizontal or vertical) and the
-  // line it cuts through (either a row or a column). The line number is an
-  // index, either the x or y from the coordinate you slice at. Therefore, the
-  // slice is between line and line - 1. So, a valid slice must have a line
-  // number greater than one (otherwise you would be slicing the border of the
-  // board).
-  direction: Direction;
-  line: number;
-}
+import {
+  Direction,
+  type Action,
+  type Board,
+  type BoardDimensions,
+  type PlayerInfo,
+  type Slice,
+  type TileCoordinate,
+  type Turn,
+  WinConditionEnum as WinConditionEnum,
+  ScoreConditionEnum as ScoreConditionEnum,
+  type SliceResult,
+  type Ruleset,
+} from "../../../shared";
 
 export function tileCoordinateToString(coord: TileCoordinate): string {
   return `(${coord.x}, ${coord.y})`;
 }
-
-export interface TileCoordinate {
-  // Coordinates start from the top-left corner (0, 0), like pixels, not like
-  // regular cartesian coordinates.
-  x: number;
-  y: number;
-}
-
-export interface PlayerInfo {
-  uuid: string;
-  name: string;
-  turnRemainder: number; // The player's turn is when (turn number % player count) == turn modulo
-}
-
 export class Player<TState extends BaseState> {
   info: PlayerInfo;
 
-  getActionCallback: (state: TState) => Promise<Action>;
+  getActionCallback: (state: TState) => Promise<[Action, Board[] | undefined]>;
 
   /**
    * Creates a new Player.
@@ -43,33 +27,25 @@ export class Player<TState extends BaseState> {
    * order.
    * @param getActionCallback - This function is called when it is this player's
    * turn to act. It should return a promise that resolves to the action the
-   * player wants to take.
+   * player wants to take. It can also optionally return an array of new boards
+   * that will be compared to the ones this action creates, and if any of the
+   * boards are identical, then the provided board will be used instead (i.e.
+   * retaining the provided UUID)
    */
   constructor(
     name: string,
     turnRemainder: number,
-    getActionCallback: (state: TState) => Promise<Action>
+    getActionCallback: (state: TState) => Promise<[Action, Board[] | undefined]>
   ) {
     this.info = { uuid: generateUUID(), name, turnRemainder };
     this.getActionCallback = getActionCallback;
   }
 
-  public async getAction(state: TState): Promise<Action> {
+  public async getAction(
+    state: TState
+  ): Promise<[Action, Board[] | undefined]> {
     return this.getActionCallback(state);
   }
-}
-
-export interface BoardDimensions {
-  width: number;
-  height: number;
-}
-
-export interface Board {
-  // In Divinim, a board is a grid of tiles arranged in rows and columns. Some
-  // coordinates are "marked" / "poisoned".
-  dimensions: BoardDimensions;
-  markedCoordinates: TileCoordinate[];
-  uuid: string;
 }
 
 /**
@@ -110,7 +86,6 @@ function generateUUID(): string {
   // Base 62
   return generateRandomString(len, base62chars);
 }
-
 function intToAlphaNumeric(num: number): string {
   const chars =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -149,29 +124,19 @@ export function actionToString(action: Action): string {
   }}`;
 }
 
-export interface Action {
-  slice: Slice;
-  board: Board;
-}
-
-export interface Turn {
-  player: PlayerInfo;
-  action: Action;
-}
-
-export interface Rule {
+export interface GameRule {
   name: string;
   description: string;
   condition: Function;
 }
 
-export interface WinCondition<TState extends BaseState> extends Rule {
+interface WinCondition<TState extends BaseState> extends GameRule {
   // A win condition determines if the game is over, and if it is, who the
   // winner is (or winners, in case of multiple, such as a tie).
   condition: (state: TState) => PlayerInfo[] | null; // Returns the info of the winning player, or null if no winner yet
 }
 
-export const NoMovesWinCondition: WinCondition<BaseState> = {
+const NoMovesWinCondition: WinCondition<BaseState> = {
   condition: (state: BaseState): PlayerInfo[] | null => {
     // If a player has no valid moves, they lose.
     const availableActions = state.availableActions;
@@ -185,7 +150,7 @@ export const NoMovesWinCondition: WinCondition<BaseState> = {
     "The game ends when a player has no valid moves available. The other player wins.",
 };
 
-export const NoMovesHighestScoreWinCondition: WinCondition<BaseState> = {
+const NoMovesHighestScoreWinCondition: WinCondition<BaseState> = {
   condition: (state: BaseState): PlayerInfo[] | null => {
     // If a player has no valid moves, the game ends and the player with the
     // highest score wins. If multiple players have the highest score, they all
@@ -216,7 +181,7 @@ export const NoMovesHighestScoreWinCondition: WinCondition<BaseState> = {
     "The game ends when a player has no valid moves available. The player with the highest score wins.",
 };
 
-export const NoMovesLowestScoreWinCondition: WinCondition<BaseState> = {
+const NoMovesLowestScoreWinCondition: WinCondition<BaseState> = {
   condition: (state: BaseState): PlayerInfo[] | null => {
     // If a player has no valid moves, the game ends and the player with the
     // lowest score wins. If multiple players have the lowest score, they all
@@ -244,13 +209,13 @@ export const NoMovesLowestScoreWinCondition: WinCondition<BaseState> = {
     "The game ends when a player has no valid moves available. The player with the lowest score wins.",
 };
 
-export interface ScoreCondition extends Rule {
+interface ScoreCondition extends GameRule {
   // A score condition determines if a slice results in points being awarded to
   // a player, and if so, how many points.
   condition: (turnResult: TurnResult) => Map<string, number> | undefined; // Returns a map of PlayerInfo.uuid to score change, or undefined if no score change
 }
 
-export const MarkedSquaresScoreCondition: ScoreCondition = {
+const MarkedSquaresScoreCondition: ScoreCondition = {
   condition: (turnResult: TurnResult): Map<string, number> | undefined => {
     // Awards points to the player for each marked square removed from the board
     const scoreChanges = new Map<string, number>();
@@ -270,7 +235,7 @@ export const MarkedSquaresScoreCondition: ScoreCondition = {
     "Points are awarded for each marked square removed from the board.",
 };
 
-export const TotalAreaScoreCondition: ScoreCondition = {
+const TotalAreaScoreCondition: ScoreCondition = {
   condition: (turnResult: TurnResult): Map<string, number> | undefined => {
     // Awards points to the player for the total area of the removed boards
     const scoreChanges = new Map<string, number>();
@@ -290,11 +255,6 @@ export const TotalAreaScoreCondition: ScoreCondition = {
   description: "Points are awarded for the total area of the removed boards.",
 };
 
-export interface SliceRestriction {
-  // A restriction on where a slice can be made.
-  isValidSlice: (state: BaseState, slice: Slice) => boolean;
-}
-
 export interface TurnResult {
   turn: Turn;
   inState: BaseState;
@@ -302,15 +262,45 @@ export interface TurnResult {
   sliceResult: SliceResult;
 }
 
-export interface SliceResult {
-  boards: {
-    reducedBoard: Board | null; // The left or top of the sliced board. Will be null if this part of the board was removed due to not having any marked coordinates.
-    childBoard: Board | null; // The right or bottom of the sliced board. Will be null if this part of the board was removed due to not having any marked coordinates.
-  };
-  removedBoards: Board[]; // Will all have either zero marked coordinates, or be a single 1x1 board that is marked
-  scoreChanges?: Record<string, number>; // Keyed by PlayerInfo.uuid
-}
+/**
+ * Generates a random board configuration.
+ * @param minDimension Minimum width/height of the board
+ * @param maxDimension Maximum width/height of the board
+ * @param minMarks Minimum number of marked tiles
+ * @param maxMarks Maximum number of marked tiles
+ * @returns A randomly generated board
+ */
+export function randomBoard(
+  minDimension = 2,
+  maxDimension = 10,
+  minMarks = 1,
+  maxMarks = 10
+): Board {
+  const width =
+    Math.floor(Math.random() * (maxDimension - minDimension + 1)) +
+    minDimension;
+  const height =
+    Math.floor(Math.random() * (maxDimension - minDimension + 1)) +
+    minDimension;
+  const numMarks =
+    Math.floor(Math.random() * (maxMarks - minMarks + 1)) + minMarks;
+  const markedCoordinates: TileCoordinate[] = [];
+  const occupied = new Set<string>();
+  while (
+    markedCoordinates.length < numMarks &&
+    occupied.size < width * height
+  ) {
+    const x = Math.floor(Math.random() * width);
+    const y = Math.floor(Math.random() * height);
+    const key = `${x},${y}`;
+    if (!occupied.has(key)) {
+      occupied.add(key);
+      markedCoordinates.push({ x, y });
+    }
+  }
 
+  return newBoard({ width, height }, markedCoordinates);
+}
 export function sliceBoard(board: Board, slice: Slice): SliceResult | null {
   // Apply a slice on a board.
   // Returns null if the slice is invalid (out of bounds).
@@ -423,16 +413,12 @@ export abstract class BaseState {
   players: PlayerInfo[]; // Players should be sorted by their turnRemainder, should equal index
   scores: Record<string, number> = {}; // Keyed by PlayerInfo.uuid
   turnHistory: Turn[];
-  winConditions: WinCondition<BaseState>[];
-  scoreConditions: ScoreCondition[];
-  sliceRestrictions: SliceRestriction[];
+  postTurnUpdaters: ((turnResult: TurnResult) => void)[];
 
   constructor(
     players: PlayerInfo[],
     boards: Board[],
-    winConditions: WinCondition<BaseState>[],
-    scoreConditions: ScoreCondition[],
-    sliceRestrictions: SliceRestriction[]
+    postTurnUpdaters?: ((turnResult: TurnResult) => void)[]
   ) {
     this.boards = boards.reduce((acc, board) => {
       acc[board.uuid] = board;
@@ -440,21 +426,13 @@ export abstract class BaseState {
     }, {} as Record<string, Board>);
     this.players = players;
     this.players.sort((a, b) => a.turnRemainder - b.turnRemainder);
-    this.winConditions = winConditions;
-    this.scoreConditions = scoreConditions;
-    this.sliceRestrictions = sliceRestrictions;
     this.turnHistory = [];
     this.scores = {};
     for (const player of players) {
       this.scores[player.uuid] = 0;
     }
+    this.postTurnUpdaters = postTurnUpdaters || [];
   }
-
-  // This method is called after each turn is played, and can be used to
-  // update any state that depends on the turn history or the current boards.
-  // For example, ensuring that boards are positioned consistently after a
-  // slice.
-  abstract postTurnUpdate(turnResult: TurnResult): void;
 
   get availableActions(): Action[] {
     // For each board, a slice can be made between any two tiles, or
@@ -497,18 +475,62 @@ export class Game<TState extends BaseState> {
   state: TState;
   players: Player<TState>[];
   // Players should be sorted by their turnRemainder
+  winConditions: WinCondition<BaseState>[];
+  scoreConditions: ScoreCondition[];
 
-  constructor(initialState: TState, players: Player<TState>[]) {
+  public ruleset: Ruleset;
+
+  constructor(
+    initialState: TState,
+    players: Player<TState>[],
+    ruleset: Ruleset
+  ) {
     this.state = initialState;
+    this.ruleset = ruleset;
     this.players = players;
     this.players.sort((a, b) => a.info.turnRemainder - b.info.turnRemainder);
+    this.winConditions = [
+      ruleset.winCondition == WinConditionEnum.HighestScore
+        ? NoMovesHighestScoreWinCondition
+        : ruleset.winCondition == WinConditionEnum.LowestScore
+        ? NoMovesLowestScoreWinCondition
+        : NoMovesWinCondition,
+    ];
+    this.scoreConditions =
+      ruleset.scoreCondition !== undefined
+        ? [
+            ruleset.scoreCondition == ScoreConditionEnum.TotalArea
+              ? TotalAreaScoreCondition
+              : MarkedSquaresScoreCondition,
+          ]
+        : [];
   }
 
+  get availableActions(): Action[] {
+    // For each board, a slice can be made between any two tiles, or
+    // equivalently between any two rows or columns.
+    const actions: Action[] = [];
+    for (const board of Object.values(this.state.boards)) {
+      for (let x = 1; x < board.dimensions.width; x++) {
+        actions.push({
+          slice: { direction: Direction.Vertical, line: x },
+          board: board,
+        });
+      }
+      for (let y = 1; y < board.dimensions.height; y++) {
+        actions.push({
+          slice: { direction: Direction.Horizontal, line: y },
+          board: board,
+        });
+      }
+    }
+    return actions;
+  }
   public get winners(): PlayerInfo[] {
     // Returns the info of the winning players, or an empty array if no winner
     // yet
     const winners: PlayerInfo[] = [];
-    for (const winCondition of this.state.winConditions) {
+    for (const winCondition of this.winConditions) {
       const result = winCondition.condition(this.state);
       if (result) {
         winners.push(...result);
@@ -517,7 +539,7 @@ export class Game<TState extends BaseState> {
     return winners;
   }
 
-  public simulateTurn(turn: Turn): TState {
+  public simulateTurn(turn: Turn, requestedNewBoards?: Board[]): TState {
     const { slice, board } = turn.action;
     const targetBoard = this.state.boards[board.uuid];
     if (!targetBoard) {
@@ -550,7 +572,7 @@ export class Game<TState extends BaseState> {
     };
 
     const scoreChanges: Record<string, number> = {};
-    for (const scoreCondition of this.state.scoreConditions) {
+    for (const scoreCondition of this.scoreConditions) {
       const result = scoreCondition.condition(turnResult);
       if (result) {
         for (const [playerUuid, scoreChange] of result.entries()) {
@@ -566,13 +588,47 @@ export class Game<TState extends BaseState> {
       stateCopy.scores[playerUuid] += scoreChange;
     }
 
-    stateCopy.postTurnUpdate(turnResult);
+    // If the player provided new boards that match the child or reduced board,
+    // use it instead to retain of those to retain the UUID (and any other
+    // properties)
+
+    if (requestedNewBoards) {
+      for (const requestedBoard of requestedNewBoards) {
+        if (
+          turnResult.sliceResult.boards.childBoard &&
+          boardHash(turnResult.sliceResult.boards.childBoard) ===
+            boardHash(requestedBoard)
+        ) {
+          stateCopy.boards[requestedBoard.uuid] = requestedBoard;
+          delete stateCopy.boards[
+            turnResult.sliceResult.boards.childBoard.uuid
+          ];
+          turnResult.sliceResult.boards.childBoard = requestedBoard;
+        } else if (
+          turnResult.sliceResult.boards.reducedBoard &&
+          boardHash(turnResult.sliceResult.boards.reducedBoard) ===
+            boardHash(requestedBoard)
+        ) {
+          stateCopy.boards[requestedBoard.uuid] = requestedBoard;
+          delete stateCopy.boards[
+            turnResult.sliceResult.boards.reducedBoard.uuid
+          ];
+          turnResult.sliceResult.boards.reducedBoard = requestedBoard;
+        }
+      }
+    }
+
+    stateCopy.postTurnUpdaters.forEach((updater) => {
+      updater(turnResult);
+    });
 
     return stateCopy;
   }
 
-  public playTurn(turn: Turn): void {
-    this.state = this.simulateTurn(turn);
+  public playTurn(turn: Turn, requestedNewBoards?: Board[]): void {
+    const newState = this.simulateTurn(turn, requestedNewBoards);
+
+    this.state = newState;
     this.state.turnHistory.push(turn);
   }
 
@@ -581,12 +637,17 @@ export class Game<TState extends BaseState> {
       const currentPlayer = this.currentPlayer();
       if (!currentPlayer) throw new Error("No current player found");
 
-      const action = await this.requestPlayerAction(currentPlayer);
+      const [action, requestedNewBoards] = await this.requestPlayerAction(
+        currentPlayer
+      );
       if (this.isValidAction(action)) {
-        this.playTurn({
-          player: currentPlayer.info,
-          action: action,
-        });
+        this.playTurn(
+          {
+            player: currentPlayer.info,
+            action: action,
+          },
+          requestedNewBoards
+        );
       }
 
       if (this.winners.length > 0) {
@@ -595,7 +656,9 @@ export class Game<TState extends BaseState> {
     }
   }
 
-  public async requestPlayerAction(player: Player<TState>): Promise<Action> {
+  public async requestPlayerAction(
+    player: Player<TState>
+  ): Promise<[Action, Board[] | undefined]> {
     return player.getAction(this.state);
   }
 
@@ -700,7 +763,7 @@ export class RandomPlayer extends Player<BaseState> {
 
       return new Promise((resolve) => {
         setTimeout(() => {
-          resolve(randomAction);
+          resolve([randomAction, undefined]);
         }, this.delayMs);
       });
     });

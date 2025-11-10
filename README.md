@@ -5,8 +5,9 @@ Divinimity is a web app adaptation of the abstract strategy game Divinim.
 ## Architecture
 
 The project is split into two main parts: a backend server and a frontend
-client. The majority of the game logic is in the frontend, with the backend
-used for facilitating multiplayer games.
+client. The majority of the game logic is in the frontend, with the backend used
+for facilitating multiplayer games. Additionally, there is a shared directory
+containing types and utilities used by both the frontend and backend.
 
 The backend is built with Node.js and Express, and is written in TypeScript. It
 interacts with a RethinkDB database to store game state and player information

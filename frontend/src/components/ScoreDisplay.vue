@@ -1,6 +1,6 @@
 <script lang="ts">
 import { defineComponent, type PropType } from "vue";
-import { BaseState, type PlayerInfo } from "../model/BaseModel";
+import { BaseState } from "../model/BaseModel";
 
 export default defineComponent({
   components: {},
@@ -21,7 +21,7 @@ export default defineComponent({
 });
 </script>
 <template>
-  <span class="stats bg-base-200 shadow border-2 border-primary">
+  <span class="stats">
     <div
       v-for="player in gameState.players"
       :key="player.uuid"

@@ -24,6 +24,7 @@
     "tailwindcss": "^4.1.11",
     "typescript": "^5.9.3",
     "vue": "^3.5.18",
+    "vue-router": "^4.6.3",
     "zod": "^3.25.76"
   }
 }
